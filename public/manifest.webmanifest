@@ -1,0 +1,21 @@
+{
+  "name": "拼豆图纸转换器",
+  "short_name": "拼豆图纸",
+  "description": "把任意图片转换成可编辑、可导出的拼豆色号图纸。",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f7f8fb",
+  "theme_color": "#146b70",
+  "lang": "zh-CN",
+  "categories": ["art", "design", "productivity"],
+  "icons": [
+    {
+      "src": "/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

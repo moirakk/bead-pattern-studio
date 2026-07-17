@@ -1,24 +1,29 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import { PwaInstaller } from "./pwa-installer";
 
 export const metadata: Metadata = {
   title: "拼豆图纸转换器",
-  description: "把任意图片转换成拼豆店色号图纸的网页原型。",
+  description: "把任意图片转换成可编辑、可导出的拼豆色号图纸。",
+  applicationName: "拼豆图纸",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "拼豆图纸",
+  },
+  formatDetection: {
+    telephone: false,
+  },
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
+    apple: "/app-icon.svg",
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#146b70",
 };
 
 export default function RootLayout({
@@ -28,9 +33,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body>
+        <PwaInstaller />
         {children}
       </body>
     </html>
