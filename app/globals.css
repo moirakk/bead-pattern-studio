@@ -548,6 +548,18 @@ input[type="range"] {
   color: inherit;
 }
 
+.palette-source button {
+  justify-self: start;
+  min-height: 32px;
+  padding: 0 12px;
+  color: #fff;
+  background: var(--teal-dark);
+  border: 0;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .palette-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

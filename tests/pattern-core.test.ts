@@ -10,6 +10,7 @@ import {
   createBeadColor,
   createPatternHistory,
   hexToRgb,
+  makeMard221Palette,
   nearestColor,
   paintPatternArea,
   paintPatternCell,
@@ -141,6 +142,17 @@ bad,not-a-color`);
   assert.equal(parsed[0].name, "Snow");
   assert.equal(parsed[1].code, "SHOP002");
   assert.equal(parsed[1].name, "SHOP002");
+});
+
+test("loads built-in MARD 221 palette with verified sample codes", () => {
+  const mard = makeMard221Palette();
+  const byCode = new Map(mard.map((color) => [color.code, color.hex]));
+
+  assert.equal(mard.length, 221);
+  assert.equal(byCode.get("A1"), "#faf4c8");
+  assert.equal(byCode.get("B1"), "#e6ee31");
+  assert.equal(byCode.get("H7"), "#000000");
+  assert.equal(byCode.get("M15"), "#757d78");
 });
 
 test("builds a multi-page PDF from JPEG page images", async () => {

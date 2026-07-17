@@ -10,6 +10,7 @@ import {
   commitPattern,
   createPatternHistory,
   hexToRgb,
+  makeMard221Palette,
   paintPatternCell,
   paintPatternArea,
   parsePaletteCsv,
@@ -41,7 +42,7 @@ type SelectionDraft = {
   endY: number;
 };
 
-type PaletteSourceKind = "missing" | "imported";
+type PaletteSourceKind = "builtin" | "imported" | "missing";
 
 type SavedProject = {
   id: string;
@@ -63,8 +64,9 @@ type SavedProject = {
   thumbnail: string;
 };
 
-const MISSING_PALETTE_NAME = "未导入真实色卡";
-const MISSING_PALETTE_WARNING = "请先导入店铺/品牌真实 CSV；未导入前不会生成或导出正式拼豆图纸。";
+const BUILTIN_MARD_221_NAME = "MARD 221 标准色卡";
+const BUILTIN_MARD_221_NOTE = "色卡：MARD 221 标准色卡（国内零售常见版本；HEX 为屏幕近似值，实物以豆子批次为准）";
+const MISSING_PALETTE_WARNING = "请选择内置色卡或导入店铺/品牌真实 CSV。";
 
 const TECH_CARDS = [
   {
@@ -227,20 +229,20 @@ function drawCenteredCellCode(
 }
 
 export function BeadPatternApp() {
-  const [palette, setPalette] = useState<BeadColor[]>([]);
-  const [paletteName, setPaletteName] = useState(MISSING_PALETTE_NAME);
-  const [paletteSourceKind, setPaletteSourceKind] = useState<PaletteSourceKind>("missing");
+  const [palette, setPalette] = useState<BeadColor[]>(makeMard221Palette);
+  const [paletteName, setPaletteName] = useState(BUILTIN_MARD_221_NAME);
+  const [paletteSourceKind, setPaletteSourceKind] = useState<PaletteSourceKind>("builtin");
   const [sourceImage, setSourceImage] = useState<HTMLImageElement | null>(null);
   const [imageName, setImageName] = useState("未上传图片");
   const [projectTitle, setProjectTitle] = useState("未命名拼豆图纸");
   const [gridWidth, setGridWidth] = useState(48);
   const [gridHeight, setGridHeight] = useState(48);
   const [keepRatio, setKeepRatio] = useState(true);
-  const [colorLimit, setColorLimit] = useState(18);
+  const [colorLimit, setColorLimit] = useState(48);
   const [ditherMode, setDitherMode] = useState<DitherMode>("none");
   const [crop, setCrop] = useState<Crop>({ x: 0, y: 0, width: 100, height: 100 });
   const [patternHistory, setPatternHistory] = useState<PatternHistory>(() => createPatternHistory(null));
-  const [selectedCode, setSelectedCode] = useState("");
+  const [selectedCode, setSelectedCode] = useState("H7");
   const [activeCell, setActiveCell] = useState<number | null>(null);
   const [editMode, setEditMode] = useState<EditMode>("paint");
   const [selection, setSelection] = useState<SelectionDraft | null>(null);
@@ -261,8 +263,13 @@ export function BeadPatternApp() {
   const stats = useMemo(() => summarizePattern(pattern, palette), [pattern, palette]);
   const exportTitle = projectTitle.trim() || stripFileExtension(imageName) || "未命名拼豆图纸";
   const exportFilename = makeSafeFilename(exportTitle);
-  const hasRealPalette = paletteSourceKind === "imported" && palette.length > 0;
-  const paletteSourceText = hasRealPalette ? `色卡来源：${paletteName}（用户导入，请以店铺/品牌原始色卡为准）` : MISSING_PALETTE_WARNING;
+  const hasUsablePalette = palette.length > 0 && paletteSourceKind !== "missing";
+  const paletteSourceText =
+    paletteSourceKind === "builtin"
+      ? BUILTIN_MARD_221_NOTE
+      : paletteSourceKind === "imported"
+        ? `色卡来源：${paletteName}（用户导入，请以店铺/品牌原始色卡为准）`
+        : MISSING_PALETTE_WARNING;
   const totalBeans = pattern ? pattern.width * pattern.height : gridWidth * gridHeight;
   const canUndo = canUndoPattern(patternHistory);
   const canRedo = canRedoPattern(patternHistory);
@@ -279,12 +286,12 @@ export function BeadPatternApp() {
   useEffect(() => {
     if (!sourceImage) return;
     const timer = window.setTimeout(() => {
-      if (!hasRealPalette) {
+      if (!hasUsablePalette) {
         setPatternHistory((current) => resetPatternHistory(current, null));
         setActiveCell(null);
         setSelection(null);
         setIsSelecting(false);
-        setStatus("图片已载入。请先导入店铺/品牌真实色卡 CSV，系统才会生成可制作图纸。");
+        setStatus("图片已载入。请选择内置色卡或导入店铺/品牌 CSV 后再生成图纸。");
         return;
       }
       const canvas = workCanvasRef.current ?? document.createElement("canvas");
@@ -323,7 +330,7 @@ export function BeadPatternApp() {
       setStatus(`已生成 ${gridWidth} x ${gridHeight}，共 ${gridWidth * gridHeight} 颗豆，${ditherLabel}。`);
     }, 120);
     return () => window.clearTimeout(timer);
-  }, [sourceImage, gridWidth, gridHeight, palette, colorLimit, ditherMode, crop, hasRealPalette]);
+  }, [sourceImage, gridWidth, gridHeight, palette, colorLimit, ditherMode, crop, hasUsablePalette]);
 
   useEffect(() => {
     const canvas = sourcePreviewRef.current;
@@ -468,6 +475,16 @@ export function BeadPatternApp() {
     });
   }
 
+  function useBuiltinMard221Palette() {
+    const nextPalette = makeMard221Palette();
+    setPalette(nextPalette);
+    setPaletteName(BUILTIN_MARD_221_NAME);
+    setPaletteSourceKind("builtin");
+    setSelectedCode("H7");
+    setColorLimit(Math.min(colorLimit, nextPalette.length));
+    setStatus("已切换到 MARD 221 标准色卡。");
+  }
+
   function makeSavedProjectThumbnail(targetPattern: Pattern) {
     const canvas = document.createElement("canvas");
     canvas.width = 180;
@@ -497,8 +514,8 @@ export function BeadPatternApp() {
       setStatus("请先生成图纸，再保存作品。");
       return;
     }
-    if (!hasRealPalette) {
-      setStatus("请先导入店铺/品牌真实色卡 CSV，再保存正式图纸。");
+    if (!hasUsablePalette) {
+      setStatus("请选择内置色卡或导入店铺/品牌 CSV，再保存正式图纸。");
       return;
     }
     const title = exportTitle;
@@ -530,30 +547,31 @@ export function BeadPatternApp() {
   }
 
   function restoreProject(project: SavedProject) {
-    const projectHasRealPalette = project.settings.paletteSourceKind === "imported" && project.palette.length > 0;
+    const projectHasUsablePalette =
+      (project.settings.paletteSourceKind === "builtin" || project.settings.paletteSourceKind === "imported") && project.palette.length > 0;
     setSourceImage(null);
     setProjectTitle(project.title);
     setImageName(project.sourceName);
-    setPalette(projectHasRealPalette ? project.palette : []);
-    setPaletteName(projectHasRealPalette ? project.settings.paletteName ?? "用户导入色卡" : MISSING_PALETTE_NAME);
-    setPaletteSourceKind(projectHasRealPalette ? "imported" : "missing");
+    setPalette(projectHasUsablePalette ? project.palette : makeMard221Palette());
+    setPaletteName(projectHasUsablePalette ? project.settings.paletteName ?? BUILTIN_MARD_221_NAME : BUILTIN_MARD_221_NAME);
+    setPaletteSourceKind(projectHasUsablePalette ? project.settings.paletteSourceKind ?? "builtin" : "builtin");
     setGridWidth(project.settings.gridWidth);
     setGridHeight(project.settings.gridHeight);
     setColorLimit(project.settings.colorLimit);
     setDitherMode(project.settings.ditherMode);
     setCrop(project.settings.crop);
-    setSelectedCode(projectHasRealPalette ? project.settings.selectedCode : "");
-    setPatternHistory((current) => resetPatternHistory(current, projectHasRealPalette ? project.pattern : null));
+    setSelectedCode(projectHasUsablePalette ? project.settings.selectedCode : "H7");
+    setPatternHistory((current) => resetPatternHistory(current, projectHasUsablePalette ? project.pattern : null));
     setActiveCell(null);
     setSelection(null);
     setIsSelecting(false);
-    setStatus(projectHasRealPalette ? `已恢复作品「${project.title}」，可继续编辑或导出。` : "这个旧项目没有可验证真实色卡，请重新导入店铺/品牌 CSV 后再生成。");
+    setStatus(projectHasUsablePalette ? `已恢复作品「${project.title}」，可继续编辑或导出。` : "这个旧项目没有可验证色卡，已切换到 MARD 221，请重新上传图片生成。");
   }
 
   function drawPaletteSourceNotice(ctx: CanvasRenderingContext2D, x: number, y: number, width: number) {
-    const fill = hasRealPalette ? "#eef8f6" : "#fff1e8";
-    const stroke = hasRealPalette ? "#91d7d1" : "#ff9b74";
-    const text = hasRealPalette ? "#146b70" : "#8a2d13";
+    const fill = hasUsablePalette ? "#eef8f6" : "#fff1e8";
+    const stroke = hasUsablePalette ? "#91d7d1" : "#ff9b74";
+    const text = hasUsablePalette ? "#146b70" : "#8a2d13";
     fillRoundedRect(ctx, x, y, width, 42, 12, fill);
     strokeRoundedRect(ctx, x, y, width, 42, 12, stroke);
     ctx.fillStyle = text;
@@ -564,7 +582,7 @@ export function BeadPatternApp() {
   }
 
   function drawA4PaletteSourceLine(ctx: CanvasRenderingContext2D) {
-    ctx.fillStyle = hasRealPalette ? "#146b70" : "#9a3412";
+    ctx.fillStyle = hasUsablePalette ? "#146b70" : "#9a3412";
     ctx.font = "700 12px Arial, PingFang SC, sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
@@ -1111,8 +1129,8 @@ export function BeadPatternApp() {
   }
 
   function exportPng() {
-    if (!hasRealPalette) {
-      setStatus("请先导入真实色卡 CSV，再导出 PNG 图纸。");
+    if (!hasUsablePalette) {
+      setStatus("请选择内置色卡或导入店铺/品牌 CSV，再导出 PNG 图纸。");
       return;
     }
     const canvas = makeExportCanvas();
@@ -1123,8 +1141,8 @@ export function BeadPatternApp() {
   }
 
   function exportPdf() {
-    if (!hasRealPalette) {
-      setStatus("请先导入真实色卡 CSV，再导出 PDF 图纸。");
+    if (!hasUsablePalette) {
+      setStatus("请选择内置色卡或导入店铺/品牌 CSV，再导出 PDF 图纸。");
       return;
     }
     const summaryPage = makeA4SummaryPage();
@@ -1239,7 +1257,7 @@ export function BeadPatternApp() {
               min="1"
               max={Math.max(1, palette.length)}
               value={Math.min(colorLimit, Math.max(1, palette.length))}
-              disabled={!hasRealPalette}
+              disabled={!hasUsablePalette}
               onChange={(event) => setColorLimit(Number(event.target.value))}
             />
           </label>
@@ -1272,9 +1290,9 @@ export function BeadPatternApp() {
               <p>{status}</p>
             </div>
             <div className="export-actions">
-              <button type="button" onClick={saveCurrentProject} disabled={!pattern || !hasRealPalette}>保存</button>
-              <button type="button" onClick={exportPng} disabled={!pattern || !hasRealPalette}>PNG 图纸</button>
-              <button type="button" onClick={exportPdf} disabled={!pattern || !hasRealPalette}>PDF 图纸</button>
+              <button type="button" onClick={saveCurrentProject} disabled={!pattern || !hasUsablePalette}>保存</button>
+              <button type="button" onClick={exportPng} disabled={!pattern || !hasUsablePalette}>PNG 图纸</button>
+              <button type="button" onClick={exportPdf} disabled={!pattern || !hasUsablePalette}>PDF 图纸</button>
             </div>
           </div>
 
@@ -1290,8 +1308,8 @@ export function BeadPatternApp() {
               />
             ) : (
               <div className="pattern-empty">
-                <strong>{hasRealPalette ? "上传图片开始生成" : "先导入真实色卡"}</strong>
-                <span>{hasRealPalette ? "这里会显示可点击编辑的拼豆网格。" : "没有真实色卡时不会生成正式拼豆图纸，避免输出错误色号。"}</span>
+                <strong>{hasUsablePalette ? "上传图片开始生成" : "先选择色卡"}</strong>
+                <span>{hasUsablePalette ? "这里会显示可点击编辑的拼豆网格。" : "默认可使用 MARD 221，也可以导入店铺自己的 CSV。"}</span>
               </div>
             )}
           </div>
@@ -1317,13 +1335,13 @@ export function BeadPatternApp() {
                 重做
               </button>
             </div>
-            <select value={selectedCode} disabled={!hasRealPalette} onChange={(event) => setSelectedCode(event.target.value)}>
-              {hasRealPalette ? (
+            <select value={selectedCode} disabled={!hasUsablePalette} onChange={(event) => setSelectedCode(event.target.value)}>
+              {hasUsablePalette ? (
                 palette.map((color) => (
                   <option key={color.code} value={color.code}>{color.code} · {color.name}</option>
                 ))
               ) : (
-                <option value="">请先导入真实色卡</option>
+                <option value="">请先选择色卡</option>
               )}
             </select>
             <span className="swatch-large" style={{ background: selectedColor?.hex }} />
@@ -1345,16 +1363,21 @@ export function BeadPatternApp() {
           </div>
           <label className="file-drop compact-drop">
             <input type="file" accept=".csv,text/csv" onChange={handlePaletteUpload} />
-            <strong>导入店铺色卡 CSV</strong>
-            <small>code,name,hex 或 code,hex</small>
+            <strong>可选：导入店铺色卡 CSV</strong>
+            <small>默认使用 MARD 221；CSV 支持 code,name,hex 或 code,hex</small>
           </label>
-          <div className={hasRealPalette ? "palette-source" : "palette-source warning"}>
+          <div className={hasUsablePalette ? "palette-source" : "palette-source warning"}>
             <strong>{paletteName}</strong>
             <span>{paletteSourceText}</span>
+            {paletteSourceKind !== "builtin" && (
+              <button type="button" onClick={useBuiltinMard221Palette}>
+                使用 MARD 221
+              </button>
+            )}
           </div>
 
           <div className="palette-grid" aria-label="色号表">
-            {hasRealPalette ? (
+            {hasUsablePalette ? (
               palette.map((color) => (
                 <button
                   key={color.code}
@@ -1368,7 +1391,7 @@ export function BeadPatternApp() {
                 </button>
               ))
             ) : (
-              <p className="muted palette-placeholder">等待导入真实色卡 CSV。</p>
+              <p className="muted palette-placeholder">请选择内置色卡或导入 CSV。</p>
             )}
           </div>
 
