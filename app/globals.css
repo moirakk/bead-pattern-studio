@@ -140,6 +140,10 @@ button:disabled {
   margin: 0 auto;
 }
 
+.mobile-tabbar {
+  display: none;
+}
+
 .panel,
 .pattern-stage {
   padding: 18px;
@@ -739,26 +743,110 @@ input[type="range"] {
 
 @media (max-width: 860px) {
   .bead-app {
-    padding: 14px;
+    padding: 12px 12px calc(96px + env(safe-area-inset-bottom));
   }
 
-  .hero,
-  .workspace {
+  .hero {
     grid-template-columns: 1fr;
   }
 
   .hero {
-    padding: 18px;
+    margin-bottom: 10px;
+    padding: 14px;
+  }
+
+  .eyebrow {
+    margin-bottom: 8px;
+    font-size: 11px;
+  }
+
+  .hero h1 {
+    font-size: 27px;
+  }
+
+  .hero-copy {
+    margin-top: 8px;
+    font-size: 14px;
   }
 
   .hero-meter {
     width: 100%;
     min-width: 0;
     grid-template-columns: auto 1fr;
+    padding: 12px;
+  }
+
+  .mobile-tabbar {
+    position: fixed;
+    z-index: 30;
+    right: 12px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    left: 12px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    padding: 6px;
+    background: rgba(255, 255, 255, 0.94);
+    border: 1px solid rgba(217, 225, 231, 0.9);
+    border-radius: 18px;
+    box-shadow: 0 18px 46px rgba(17, 24, 39, 0.18);
+    backdrop-filter: blur(18px);
+  }
+
+  .mobile-tabbar button {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    min-height: 54px;
+    place-items: center;
+    color: var(--muted);
+    background: transparent;
+    border: 0;
+    border-radius: 14px;
+    font-weight: 800;
+  }
+
+  .mobile-tabbar button.active {
+    color: #fff;
+    background: var(--teal-dark);
+    box-shadow: 0 10px 24px rgba(20, 107, 112, 0.22);
+  }
+
+  .mobile-tabbar span {
+    font-size: 14px;
+    line-height: 1.1;
+  }
+
+  .mobile-tabbar small {
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .workspace {
+    display: block;
+  }
+
+  .mobile-panel {
+    display: none;
+  }
+
+  .mobile-panel.mobile-panel-active {
+    display: block;
+  }
+
+  .panel,
+  .pattern-stage {
+    padding: 14px;
   }
 
   .canvas-wrap {
-    min-height: 360px;
+    min-height: min(58vh, 480px);
+    max-height: 62vh;
   }
 
   .stage-toolbar,
@@ -780,7 +868,35 @@ input[type="range"] {
     display: grid;
   }
 
+  .export-actions button {
+    flex: 1;
+  }
+
+  .paint-bar {
+    position: sticky;
+    bottom: 76px;
+    z-index: 8;
+    margin-right: -6px;
+    margin-left: -6px;
+    box-shadow: 0 14px 34px rgba(17, 24, 39, 0.12);
+  }
+
+  .history-actions,
+  .edit-mode-toggle,
+  .selection-actions {
+    width: 100%;
+  }
+
+  .history-actions button {
+    flex: 1;
+  }
+
   .palette-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+    max-height: 230px;
+  }
+
+  .stats-list {
+    max-height: 42vh;
   }
 }

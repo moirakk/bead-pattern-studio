@@ -35,6 +35,8 @@ type Crop = {
 
 type EditMode = "paint" | "select";
 
+type MobilePanel = "setup" | "pattern" | "palette";
+
 type SelectionDraft = {
   startX: number;
   startY: number;
@@ -231,6 +233,7 @@ export function BeadPatternApp() {
   const [savedProjects, setSavedProjects] = useState<SavedProject[]>(() =>
     typeof window === "undefined" ? [] : readSavedProjects(),
   );
+  const [activeMobilePanel, setActiveMobilePanel] = useState<MobilePanel>("setup");
   const [status, setStatus] = useState("上传图片后会自动生成图纸。");
   const sourcePreviewRef = useRef<HTMLCanvasElement | null>(null);
   const workCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -413,6 +416,7 @@ export function BeadPatternApp() {
       if (keepRatio) {
         setGridHeight(Math.max(8, Math.round(gridWidth * (image.naturalHeight / image.naturalWidth))));
       }
+      setActiveMobilePanel("pattern");
       setStatus("图片已载入，正在生成图纸。");
     };
     image.src = URL.createObjectURL(file);
@@ -549,6 +553,7 @@ export function BeadPatternApp() {
     setActiveCell(null);
     setSelection(null);
     setIsSelecting(false);
+    setActiveMobilePanel("pattern");
     setStatus(projectHasUsablePalette ? `已恢复作品「${project.title}」，可继续编辑或导出。` : "这个旧项目没有可验证色卡，已切换到 MARD 221，请重新上传图片生成。");
   }
 
@@ -1162,8 +1167,38 @@ export function BeadPatternApp() {
         </div>
       </header>
 
+      <nav className="mobile-tabbar" aria-label="移动端功能分区">
+        <button
+          type="button"
+          className={activeMobilePanel === "setup" ? "active" : ""}
+          aria-pressed={activeMobilePanel === "setup"}
+          onClick={() => setActiveMobilePanel("setup")}
+        >
+          <span>设置</span>
+          <small>{gridWidth} x {gridHeight}</small>
+        </button>
+        <button
+          type="button"
+          className={activeMobilePanel === "pattern" ? "active" : ""}
+          aria-pressed={activeMobilePanel === "pattern"}
+          onClick={() => setActiveMobilePanel("pattern")}
+        >
+          <span>图纸</span>
+          <small>{pattern ? `${formatCount(pattern.cells.length)} 颗` : "待生成"}</small>
+        </button>
+        <button
+          type="button"
+          className={activeMobilePanel === "palette" ? "active" : ""}
+          aria-pressed={activeMobilePanel === "palette"}
+          onClick={() => setActiveMobilePanel("palette")}
+        >
+          <span>色号</span>
+          <small>{stats.length ? `${stats.length} 色` : `${palette.length} 色卡`}</small>
+        </button>
+      </nav>
+
       <section className="workspace" aria-label="拼豆图纸工具">
-        <aside className="panel controls">
+        <aside className={`panel controls mobile-panel ${activeMobilePanel === "setup" ? "mobile-panel-active" : ""}`}>
           <div className="panel-title">
             <span>1</span>
             <h2>图片与裁剪</h2>
@@ -1258,7 +1293,7 @@ export function BeadPatternApp() {
           </div>
         </aside>
 
-        <section className="pattern-stage">
+        <section className={`pattern-stage mobile-panel ${activeMobilePanel === "pattern" ? "mobile-panel-active" : ""}`}>
           <div className="stage-toolbar">
             <div>
               <h2>图纸编辑</h2>
@@ -1331,7 +1366,7 @@ export function BeadPatternApp() {
           </div>
         </section>
 
-        <aside className="panel stats-panel">
+        <aside className={`panel stats-panel mobile-panel ${activeMobilePanel === "palette" ? "mobile-panel-active" : ""}`}>
           <div className="panel-title">
             <span>3</span>
             <h2>色卡与用量</h2>
