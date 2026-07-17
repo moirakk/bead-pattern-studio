@@ -36,7 +36,7 @@ type Crop = {
 
 type EditMode = "paint" | "select";
 
-type MobilePanel = "setup" | "pattern" | "palette";
+type MobilePanel = "setup" | "pattern" | "palette" | "works";
 
 type SelectionDraft = {
   startX: number;
@@ -225,6 +225,7 @@ export function BeadPatternApp() {
   const [savedProjects, setSavedProjects] = useState<SavedProject[]>(() =>
     typeof window === "undefined" ? [] : readSavedProjects(),
   );
+  const [pendingDeleteProjectId, setPendingDeleteProjectId] = useState<string | null>(null);
   const [activeMobilePanel, setActiveMobilePanel] = useState<MobilePanel>("setup");
   const [status, setStatus] = useState("上传图片后会自动生成图纸。");
   const sourcePreviewRef = useRef<HTMLCanvasElement | null>(null);
@@ -247,6 +248,10 @@ export function BeadPatternApp() {
         ? `色卡来源：${paletteName}（用户导入，请以店铺/品牌原始色卡为准）`
         : MISSING_PALETTE_WARNING;
   const totalBeans = pattern ? pattern.width * pattern.height : gridWidth * gridHeight;
+  const savedBeanTotal = useMemo(
+    () => savedProjects.reduce((total, project) => total + project.pattern.cells.length, 0),
+    [savedProjects],
+  );
   const canUndo = canUndoPattern(patternHistory);
   const canRedo = canRedoPattern(patternHistory);
   const selectedArea = useMemo(() => {
@@ -545,6 +550,7 @@ export function BeadPatternApp() {
     setActiveCell(null);
     setSelection(null);
     setIsSelecting(false);
+    setPendingDeleteProjectId(null);
     setActiveMobilePanel("pattern");
     setStatus(projectHasUsablePalette ? `已恢复作品「${project.title}」，可继续编辑或导出。` : "这个旧项目没有可验证色卡，已切换到 MARD 221，请重新上传图片生成。");
   }
@@ -574,7 +580,15 @@ export function BeadPatternApp() {
     const nextProjects = savedProjects.filter((project) => project.id !== projectId);
     writeSavedProjects(nextProjects);
     setSavedProjects(nextProjects);
+    setPendingDeleteProjectId(null);
     setStatus("已删除本地保存的作品。");
+  }
+
+  function showSetupPanel() {
+    setActiveMobilePanel("setup");
+    window.setTimeout(() => {
+      document.getElementById("setup-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
   }
 
   function paintCell(index: number) {
@@ -1198,10 +1212,19 @@ export function BeadPatternApp() {
           <span>色号</span>
           <small>{stats.length ? `${stats.length} 色` : `${palette.length} 色卡`}</small>
         </button>
+        <button
+          type="button"
+          className={activeMobilePanel === "works" ? "active" : ""}
+          aria-pressed={activeMobilePanel === "works"}
+          onClick={() => setActiveMobilePanel("works")}
+        >
+          <span>作品</span>
+          <small>{savedProjects.length ? `${savedProjects.length} 个` : "未保存"}</small>
+        </button>
       </nav>
 
       <section className="workspace" aria-label="拼豆图纸工具">
-        <aside className={`panel controls mobile-panel ${activeMobilePanel === "setup" ? "mobile-panel-active" : ""}`}>
+        <aside id="setup-panel" className={`panel controls mobile-panel ${activeMobilePanel === "setup" ? "mobile-panel-active" : ""}`}>
           <div className="panel-title">
             <span>1</span>
             <h2>图片与裁剪</h2>
@@ -1442,38 +1465,82 @@ export function BeadPatternApp() {
             )}
           </div>
 
-          <div className="panel-title compact">
-            <span>4</span>
-            <h2>本地作品</h2>
+        </aside>
+
+        <section className={`panel projects-panel mobile-panel ${activeMobilePanel === "works" ? "mobile-panel-active" : ""}`}>
+          <div className="portfolio-header">
+            <div className="panel-title">
+              <span>4</span>
+              <div>
+                <h2>我的拼豆作品</h2>
+                <p>保存在当前设备，可随时恢复编辑和导出。</p>
+              </div>
+            </div>
+            <button type="button" onClick={showSetupPanel}>添加作品</button>
           </div>
+
+          <div className="portfolio-summary" aria-label="本地作品汇总">
+            <div>
+              <span>作品数量</span>
+              <strong>{savedProjects.length} / {MAX_SAVED_PROJECTS}</strong>
+            </div>
+            <div>
+              <span>累计豆数</span>
+              <strong>{formatCount(savedBeanTotal)} 颗</strong>
+            </div>
+            <div>
+              <span>最近保存</span>
+              <strong>
+                {savedProjects[0]
+                  ? new Date(savedProjects[0].savedAt).toLocaleString("zh-CN", { dateStyle: "short", timeStyle: "short" })
+                  : "--"}
+              </strong>
+            </div>
+          </div>
+
           <div className="saved-projects" aria-label="本地保存作品">
             {savedProjects.length ? (
               savedProjects.map((project) => (
                 <article className="saved-project" key={project.id}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  {project.thumbnail ? <img src={project.thumbnail} alt="" /> : <div className="saved-thumb-placeholder" />}
+                  {project.thumbnail ? <img src={project.thumbnail} alt={`${project.title} 拼豆图纸缩略图`} /> : <div className="saved-thumb-placeholder" />}
                   <div>
                     <strong>{project.title}</strong>
                     <small>
                       {project.pattern.width} x {project.pattern.height} · {formatCount(project.pattern.cells.length)} 颗
                     </small>
+                    <small>{project.palette.length} 个可用色号 · 使用 {summarizePattern(project.pattern, project.palette).length} 色</small>
                     <small>{new Date(project.savedAt).toLocaleString("zh-CN", { dateStyle: "short", timeStyle: "short" })}</small>
                   </div>
                   <div className="saved-project-actions">
                     <button type="button" onClick={() => restoreProject(project)}>
-                      恢复
+                      打开编辑
                     </button>
-                    <button type="button" onClick={() => deleteSavedProject(project.id)}>
-                      删除
+                    <button
+                      type="button"
+                      className={pendingDeleteProjectId === project.id ? "danger-confirm" : ""}
+                      onClick={() => {
+                        if (pendingDeleteProjectId === project.id) {
+                          deleteSavedProject(project.id);
+                        } else {
+                          setPendingDeleteProjectId(project.id);
+                        }
+                      }}
+                    >
+                      {pendingDeleteProjectId === project.id ? "确认删除" : "删除"}
                     </button>
                   </div>
                 </article>
               ))
             ) : (
-              <p className="muted">保存后的作品会出现在这里，刷新页面也能恢复。</p>
+              <div className="portfolio-empty">
+                <strong>还没有保存的作品</strong>
+                <span>生成图纸后点击“保存”，它就会出现在这里。</span>
+                <button type="button" onClick={showSetupPanel}>上传第一张图片</button>
+              </div>
             )}
           </div>
-        </aside>
+        </section>
       </section>
     </main>
   );
