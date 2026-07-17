@@ -609,6 +609,36 @@ input[type="range"] {
   overflow: auto;
 }
 
+.kit-summary {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.kit-summary div {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 9px 10px;
+  background: #f4f8f8;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.kit-summary span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.kit-summary strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .stat-row {
   display: grid;
   grid-template-columns: 24px 54px minmax(0, 1fr) auto;

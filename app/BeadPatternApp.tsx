@@ -370,7 +370,7 @@ export function BeadPatternApp() {
     if (!canvas || !pattern) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const cellSize = Math.max(5, Math.min(22, Math.floor(980 / Math.max(pattern.width, pattern.height))));
+    const cellSize = Math.max(5, Math.min(28, Math.floor(1180 / Math.max(pattern.width, pattern.height))));
     canvas.width = pattern.width * cellSize;
     canvas.height = pattern.height * cellSize;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -379,6 +379,9 @@ export function BeadPatternApp() {
       const y = Math.floor(index / pattern.width);
       ctx.fillStyle = cell.hex;
       ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+      if (cellSize >= 16) {
+        drawCenteredCellCode(ctx, cell.code, x * cellSize, y * cellSize, cellSize, cellSize, textColorForHex(cell.hex), cellSize >= 22 ? 9 : 7);
+      }
     });
     ctx.strokeStyle = cellSize >= 10 ? "rgba(15, 23, 42, 0.28)" : "rgba(15, 23, 42, 0.12)";
     ctx.lineWidth = 1;
@@ -1393,6 +1396,21 @@ export function BeadPatternApp() {
             ) : (
               <p className="muted palette-placeholder">请选择内置色卡或导入 CSV。</p>
             )}
+          </div>
+
+          <div className="kit-summary" aria-label="制作清单汇总">
+            <div>
+              <span>总豆数</span>
+              <strong>{pattern ? formatCount(pattern.cells.length) : "--"}</strong>
+            </div>
+            <div>
+              <span>使用色号</span>
+              <strong>{stats.length ? `${stats.length} 色` : "--"}</strong>
+            </div>
+            <div>
+              <span>当前色卡</span>
+              <strong>{paletteName}</strong>
+            </div>
           </div>
 
           <div className="stats-list">
