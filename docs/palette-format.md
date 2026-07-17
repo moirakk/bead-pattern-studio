@@ -6,9 +6,9 @@
 
 ## 重要说明
 
-应用内置的 `A01`、`A02` 等颜色只是演示色卡，不对应任何官方品牌或店铺的真实可购买色号。正式制作、报价、材料包或公开分享前，必须导入店铺或品牌提供的真实色卡 CSV。
+当前应用不再内置任何默认色卡。正式制作、报价、材料包或公开分享前，必须导入店铺或品牌提供的真实色卡 CSV。
 
-导出的 PNG/PDF 会记录当前色卡来源；如果仍在使用演示色卡，会显示风险提示，避免把占位色号误认为真实色号。
+导出的 PNG/PDF 会记录当前色卡来源；未导入真实色卡时，应用不会生成或导出正式拼豆图纸，避免把占位色号误认为真实色号。
 
 ## MVP CSV 格式
 
@@ -16,16 +16,16 @@
 
 ```csv
 code,name,hex
-A01,Snow White,#f7f5ef
-A02,Ivory,#f2dfbf
+SHOP001,Warm White,#f7f5ef
+SHOP002,Ivory,#f2dfbf
 ```
 
 或：
 
 ```csv
 code,hex
-A01,#f7f5ef
-A02,#f2dfbf
+SHOP001,#f7f5ef
+SHOP002,#f2dfbf
 ```
 
 字段说明：
@@ -40,7 +40,7 @@ A02,#f2dfbf
 
 ```csv
 brand,series,code,name,hex,stock,price,aliases,enabled
-Artkal,S,A01,Snow White,#f7f5ef,12000,0.015,"white|纯白",true
+MyShop,Midi,SHOP001,Warm White,#f7f5ef,12000,0.015,"white|暖白",true
 ```
 
 字段说明：
@@ -67,9 +67,9 @@ Artkal,S,A01,Snow White,#f7f5ef,12000,0.015,"white|纯白",true
   "colors": [
     {
       "brand": "Artkal",
-      "series": "S",
-      "code": "A01",
-      "name": "Snow White",
+      "series": "5mm S",
+      "code": "S01",
+      "name": "示例色名",
       "hex": "#f7f5ef",
       "stock": 12000,
       "price": 0.015,

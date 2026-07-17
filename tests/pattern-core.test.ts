@@ -132,15 +132,15 @@ test("tracks pattern undo and redo history", () => {
 
 test("parses store palette CSV formats", () => {
   const parsed = parsePaletteCsv(`code,name,hex
-A01,Snow,#ffffff
-A02,#000000
+SHOP001,Snow,#ffffff
+SHOP002,#000000
 bad,not-a-color`);
 
   assert.equal(parsed.length, 2);
-  assert.equal(parsed[0].code, "A01");
+  assert.equal(parsed[0].code, "SHOP001");
   assert.equal(parsed[0].name, "Snow");
-  assert.equal(parsed[1].code, "A02");
-  assert.equal(parsed[1].name, "A02");
+  assert.equal(parsed[1].code, "SHOP002");
+  assert.equal(parsed[1].name, "SHOP002");
 });
 
 test("builds a multi-page PDF from JPEG page images", async () => {
