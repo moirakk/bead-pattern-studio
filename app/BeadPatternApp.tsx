@@ -80,6 +80,15 @@ function csvEscape(value: string | number) {
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
+function stripFileExtension(filename: string) {
+  return filename.replace(/\.[^/.]+$/, "");
+}
+
+function makeSafeFilename(value: string) {
+  const trimmed = value.trim() || "bead-pattern";
+  return trimmed.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "-").slice(0, 80);
+}
+
 function formatCount(value: number) {
   return value.toLocaleString("zh-CN");
 }
@@ -156,6 +165,7 @@ export function BeadPatternApp() {
   const [palette, setPalette] = useState<BeadColor[]>(makeDemoPalette);
   const [sourceImage, setSourceImage] = useState<HTMLImageElement | null>(null);
   const [imageName, setImageName] = useState("未上传图片");
+  const [projectTitle, setProjectTitle] = useState("未命名拼豆图纸");
   const [gridWidth, setGridWidth] = useState(48);
   const [gridHeight, setGridHeight] = useState(48);
   const [keepRatio, setKeepRatio] = useState(true);
@@ -179,6 +189,8 @@ export function BeadPatternApp() {
   );
   const pattern = patternHistory.present;
   const stats = useMemo(() => summarizePattern(pattern, palette), [pattern, palette]);
+  const exportTitle = projectTitle.trim() || stripFileExtension(imageName) || "未命名拼豆图纸";
+  const exportFilename = makeSafeFilename(exportTitle);
   const totalBeans = pattern ? pattern.width * pattern.height : gridWidth * gridHeight;
   const canUndo = canUndoPattern(patternHistory);
   const canRedo = canRedoPattern(patternHistory);
@@ -318,6 +330,10 @@ export function BeadPatternApp() {
     image.onload = () => {
       setSourceImage(image);
       setImageName(file.name);
+      setProjectTitle((current) => {
+        const shouldAutoName = !current.trim() || current === "未命名拼豆图纸" || current === stripFileExtension(imageName);
+        return shouldAutoName ? stripFileExtension(file.name) : current;
+      });
       if (keepRatio) {
         setGridHeight(Math.max(8, Math.round(gridWidth * (image.naturalHeight / image.naturalWidth))));
       }
@@ -457,9 +473,9 @@ export function BeadPatternApp() {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = "#111827";
     ctx.font = "700 30px Arial";
-    ctx.fillText("拼豆图纸", margin, 44);
+    ctx.fillText(exportTitle, margin, 44);
     ctx.font = "16px Arial";
-    ctx.fillText(`${imageName} · ${pattern.width} x ${pattern.height} · ${pattern.cells.length} 颗`, margin, 72);
+    ctx.fillText(`${pattern.width} x ${pattern.height} · ${pattern.cells.length} 颗 · 源图 ${imageName}`, margin, 72);
 
     const startX = margin + label;
     const startY = margin + label + 18;
@@ -653,7 +669,7 @@ export function BeadPatternApp() {
     const gridLayout = getA4GridLayout();
     const totalGridPages =
       Math.ceil(pattern.width / gridLayout.colsPerPage) * Math.ceil(pattern.height / gridLayout.rowsPerPage);
-    drawA4Header(ctx, "拼豆图纸", imageName, "封面 / 图例", "#1f9a94");
+    drawA4Header(ctx, exportTitle, `源图 ${imageName}`, "封面 / 图例", "#1f9a94");
 
     drawCard(ctx, 72, 184, 700, 860, 24);
     ctx.fillStyle = "#111827";
@@ -745,8 +761,8 @@ export function BeadPatternApp() {
 
         drawA4Header(
           ctx,
-          "拼豆分页图纸",
-          `${imageName} / 列 ${startCol + 1}-${startCol + cols} / 行 ${startRow + 1}-${startRow + rows}`,
+          exportTitle,
+          `列 ${startCol + 1}-${startCol + cols} / 行 ${startRow + 1}-${startRow + rows}`,
           `网格 ${pageNumber} / ${totalPages}`,
           "#146b70",
         );
@@ -833,7 +849,7 @@ export function BeadPatternApp() {
     const canvas = makeExportCanvas();
     if (!canvas) return;
     canvas.toBlob((blob) => {
-      if (blob) downloadBlob(blob, "bead-pattern.png");
+      if (blob) downloadBlob(blob, `${exportFilename}.png`);
     }, "image/png");
   }
 
@@ -849,13 +865,14 @@ export function BeadPatternApp() {
         imageHeight: page.height,
       })),
     );
-    downloadBlob(pdf, "bead-pattern-a4.pdf");
+    downloadBlob(pdf, `${exportFilename}-a4.pdf`);
   }
 
   function exportCsv() {
     if (!pattern) return;
     const rows: string[][] = [];
     rows.push(["section", "key", "value"]);
+    rows.push(["meta", "project_name", exportTitle]);
     rows.push(["meta", "source", imageName]);
     rows.push(["meta", "width", String(pattern.width)]);
     rows.push(["meta", "height", String(pattern.height)]);
@@ -875,7 +892,7 @@ export function BeadPatternApp() {
       rows.push(row);
     }
     const csv = rows.map((row) => row.map(csvEscape).join(",")).join("\n");
-    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), "bead-pattern.csv");
+    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), `${exportFilename}.csv`);
   }
 
   return (
@@ -915,6 +932,17 @@ export function BeadPatternApp() {
             <input type="file" accept="image/*" onChange={handleImageUpload} />
             <strong>上传图片</strong>
             <small>{imageName}</small>
+          </label>
+
+          <label className="project-name-field">
+            作品名称
+            <input
+              type="text"
+              value={projectTitle}
+              maxLength={80}
+              onChange={(event) => setProjectTitle(event.target.value)}
+              placeholder="例如：圣诞挂画 01"
+            />
           </label>
 
           <canvas ref={sourcePreviewRef} className="source-preview" aria-label="裁剪预览" />

@@ -221,6 +221,31 @@ button:disabled {
   white-space: nowrap;
 }
 
+.project-name-field {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.project-name-field input {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.project-name-field input:focus {
+  outline: 0;
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(31, 154, 148, 0.14);
+}
+
 .compact-drop {
   min-height: 84px;
 }
