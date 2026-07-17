@@ -406,11 +406,6 @@ input[type="range"] {
   background: var(--teal-dark);
 }
 
-.export-actions button:nth-child(4) {
-  color: var(--ink);
-  background: var(--yellow);
-}
-
 .canvas-wrap {
   display: grid;
   min-height: 520px;

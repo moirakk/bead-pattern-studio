@@ -12,7 +12,7 @@ Image File
   -> Lab nearest-color matcher
   -> Pattern model
   -> Canvas editor
-  -> PNG / PDF / CSV exporters
+  -> PNG / PDF pattern exporters
 ```
 
 ## 核心数据结构
@@ -62,7 +62,6 @@ lib/
     summarizePattern.ts
     history.ts
   export/
-    exportCsv.ts
     exportPng.ts
     exportPdf.ts
   projects/
@@ -105,7 +104,6 @@ lib/
 - 图纸 Canvas
 - PNG
 - PDF
-- CSV
 
 ### Storage 层
 

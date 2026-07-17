@@ -63,7 +63,7 @@ type SavedProject = {
 const TECH_CARDS = [
   {
     title: "技术方案",
-    body: "浏览器端 Canvas 处理图片；核心转换逻辑独立于 UI；色卡用 CSV/JSON 数据源替换；导出端统一从 Pattern 数据生成 PNG/PDF/CSV。",
+    body: "浏览器端 Canvas 处理图片；核心转换逻辑独立于 UI；色卡用 CSV/JSON 数据源替换；导出端统一从 Pattern 数据生成 PNG/PDF 图纸。",
   },
   {
     title: "数据结构",
@@ -95,11 +95,6 @@ function downloadBlob(blob: Blob, filename: string) {
   link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
-}
-
-function csvEscape(value: string | number) {
-  const text = String(value);
-  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 function stripFileExtension(filename: string) {
@@ -194,6 +189,35 @@ function drawFittedText(ctx: CanvasRenderingContext2D, text: string, x: number, 
     fitted = fitted.slice(0, -1);
   }
   ctx.fillText(`${fitted}...`, x, y);
+}
+
+function drawCenteredCellCode(
+  ctx: CanvasRenderingContext2D,
+  code: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  color: string,
+  maxFontSize: number,
+  minFontSize = 5,
+) {
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  let fontSize = maxFontSize;
+  do {
+    ctx.font = `700 ${fontSize}px Arial, sans-serif`;
+    if (ctx.measureText(code).width <= width - 3 || fontSize <= minFontSize) break;
+    fontSize -= 1;
+  } while (fontSize >= minFontSize);
+  const measuredWidth = Math.max(1, ctx.measureText(code).width);
+  const scaleX = Math.min(1, Math.max(0.58, (width - 3) / measuredWidth));
+  ctx.translate(x + width / 2, y + height / 2 + 0.5);
+  ctx.scale(scaleX, 1);
+  ctx.fillText(code, 0, 0);
+  ctx.restore();
 }
 
 export function BeadPatternApp() {
@@ -579,9 +603,21 @@ export function BeadPatternApp() {
 
   function makeExportCanvas() {
     if (!pattern) return null;
+    const legend = summarizePattern(pattern, palette);
+    const margin = 72;
+    const label = 46;
+    const cellSize = Math.max(18, Math.min(28, Math.floor(2600 / Math.max(pattern.width, pattern.height))));
+    const gridW = pattern.width * cellSize;
+    const gridH = pattern.height * cellSize;
+    const legendW = 430;
+    const headerH = 190;
+    const footerH = 80;
+    const legendRows = Math.max(legend.length, Math.ceil((gridH - 60) / 42));
+    const canvasW = margin + label + gridW + 54 + legendW + margin;
+    const canvasH = Math.max(headerH + label + gridH + footerH, headerH + 90 + legendRows * 42 + footerH);
     const canvas = document.createElement("canvas");
-    canvas.width = 1080;
-    canvas.height = 1440;
+    canvas.width = canvasW;
+    canvas.height = canvasH;
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
 
@@ -592,56 +628,85 @@ export function BeadPatternApp() {
     ctx.fillStyle = background;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    fillRoundedRect(ctx, 54, 54, 972, 132, 30, "#12343a");
+    fillRoundedRect(ctx, margin, 46, canvas.width - margin * 2, 116, 26, "#12343a");
     ctx.fillStyle = "rgba(255, 255, 255, 0.74)";
-    ctx.font = "700 18px Arial, sans-serif";
+    ctx.font = "700 16px Arial, sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
-    ctx.fillText("BEAD PATTERN STUDIO", 94, 105);
+    ctx.fillText("BEAD PATTERN STUDIO / PNG PATTERN SHEET", margin + 28, 90);
     ctx.fillStyle = "#ffffff";
-    ctx.font = "800 42px Arial, PingFang SC, sans-serif";
-    drawFittedText(ctx, exportTitle, 94, 154, 780);
+    ctx.font = "800 38px Arial, PingFang SC, sans-serif";
+    drawFittedText(ctx, exportTitle, margin + 28, 136, 980);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.82)";
+    ctx.font = "700 15px Arial, PingFang SC, sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(`${pattern.width} x ${pattern.height} / ${formatCount(pattern.cells.length)} 颗 / ${legend.length} 色`, canvas.width - margin - 28, 90);
 
-    drawCard(ctx, 54, 226, 972, 790, 34);
+    const gridX = margin + label;
+    const gridY = headerH + label;
+    drawCard(ctx, margin, headerH, label + gridW + 28, label + gridH + 28, 24);
+    fillRoundedRect(ctx, gridX - 8, gridY - 38, gridW + 16, 30, 10, "#eef5f4");
+    fillRoundedRect(ctx, gridX - 40, gridY - 8, 30, gridH + 16, 10, "#eef5f4");
+
+    ctx.font = "700 11px Arial, PingFang SC, sans-serif";
+    ctx.fillStyle = "#344054";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (let x = 0; x < pattern.width; x += 1) {
+      if (x % 5 === 0 || cellSize >= 22) {
+        ctx.fillText(String(x + 1), gridX + x * cellSize + cellSize / 2, gridY - 22);
+      }
+    }
+    ctx.textAlign = "right";
+    for (let y = 0; y < pattern.height; y += 1) {
+      if (y % 5 === 0 || cellSize >= 22) {
+        ctx.fillText(String(y + 1), gridX - 10, gridY + y * cellSize + cellSize / 2);
+      }
+    }
+
+    pattern.cells.forEach((cell, index) => {
+      const x = index % pattern.width;
+      const y = Math.floor(index / pattern.width);
+      const cellX = gridX + x * cellSize;
+      const cellY = gridY + y * cellSize;
+      ctx.fillStyle = cell.hex;
+      ctx.fillRect(cellX, cellY, cellSize, cellSize);
+      drawCenteredCellCode(ctx, cell.code, cellX, cellY, cellSize, cellSize, textColorForHex(cell.hex), cellSize >= 22 ? 9 : 7);
+    });
+
+    ctx.strokeStyle = "rgba(17, 24, 39, 0.34)";
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= pattern.width; x += 1) {
+      ctx.beginPath();
+      ctx.moveTo(gridX + x * cellSize + 0.5, gridY);
+      ctx.lineTo(gridX + x * cellSize + 0.5, gridY + gridH);
+      ctx.stroke();
+    }
+    for (let y = 0; y <= pattern.height; y += 1) {
+      ctx.beginPath();
+      ctx.moveTo(gridX, gridY + y * cellSize + 0.5);
+      ctx.lineTo(gridX + gridW, gridY + y * cellSize + 0.5);
+      ctx.stroke();
+    }
+
+    const legendX = gridX + gridW + 54;
+    const legendY = headerH;
+    drawCard(ctx, legendX, legendY, legendW, Math.max(300, canvas.height - headerH - footerH), 24);
     ctx.fillStyle = "#111827";
-    ctx.font = "800 26px Arial, PingFang SC, sans-serif";
-    ctx.fillText("作品预览", 98, 282);
-    ctx.fillStyle = "#5f6b7a";
-    ctx.font = "16px Arial, PingFang SC, sans-serif";
-    ctx.fillText("适合社群分享、下单确认和作品集封面。", 98, 314);
-    fillRoundedRect(ctx, 98, 352, 884, 600, 26, "#f2f7f7");
-    drawPatternPreview(ctx, 128, 386, 824, 532);
-
-    const metricY = 1058;
-    drawMetricCard(ctx, 74, metricY, 210, "尺寸", `${pattern.width} x ${pattern.height}`, "#eef8f6");
-    drawMetricCard(ctx, 306, metricY, 210, "总豆数", formatCount(pattern.cells.length), "#fff4ec");
-    drawMetricCard(ctx, 538, metricY, 210, "色号", `${stats.length} 色`, "#f4f1ff");
-    drawMetricCard(ctx, 770, metricY, 210, "格式", "PNG / PDF", "#fff9de");
-
-    drawCard(ctx, 54, 1210, 972, 150, 28);
-    ctx.fillStyle = "#111827";
-    ctx.font = "800 20px Arial, PingFang SC, sans-serif";
+    ctx.font = "800 24px Arial, PingFang SC, sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText("主要色号", 94, 1264);
-    stats.slice(0, 6).forEach((item, index) => {
-      const x = 94 + index * 148;
-      const y = 1300;
-      ctx.fillStyle = item.color?.hex ?? "#111827";
-      fillRoundedRect(ctx, x, y, 34, 34, 8, ctx.fillStyle);
-      ctx.strokeStyle = "rgba(17, 24, 39, 0.2)";
-      ctx.strokeRect(x, y, 34, 34);
-      ctx.fillStyle = "#111827";
-      ctx.font = "800 13px Arial, PingFang SC, sans-serif";
-      ctx.fillText(item.code, x + 44, y + 14);
-      ctx.fillStyle = "#5f6b7a";
-      ctx.font = "12px Arial, PingFang SC, sans-serif";
-      ctx.fillText(`${formatCount(item.count)} 颗`, x + 44, y + 32);
+    ctx.fillText("完整色号图例", legendX + 28, legendY + 50);
+    ctx.fillStyle = "#5f6b7a";
+    ctx.font = "13px Arial, PingFang SC, sans-serif";
+    ctx.fillText("每格文字对应左侧色号。", legendX + 28, legendY + 76);
+    legend.forEach((item, index) => {
+      drawLegendItem(ctx, legendX + 28, legendY + 104 + index * 42, legendW - 56, item);
     });
 
     ctx.fillStyle = "#81909d";
-    ctx.font = "14px Arial, PingFang SC, sans-serif";
+    ctx.font = "13px Arial, PingFang SC, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("Generated by Bead Pattern Studio", canvas.width / 2, 1400);
+    ctx.fillText("Generated by Bead Pattern Studio", canvas.width / 2, canvas.height - 36);
     return canvas;
   }
 
@@ -720,6 +785,12 @@ export function BeadPatternApp() {
     return { cellSize, label, header, footer, gridX, gridY, colsPerPage, rowsPerPage };
   }
 
+  function getA4LegendPageCount() {
+    const columns = 2;
+    const rowsPerPage = 22;
+    return Math.max(1, Math.ceil(stats.length / (columns * rowsPerPage)));
+  }
+
   function drawMetricCard(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, label: string, value: string, tint: string) {
     fillRoundedRect(ctx, x, y, width, 112, 18, tint);
     strokeRoundedRect(ctx, x, y, width, 112, 18, "rgba(17, 24, 39, 0.08)");
@@ -775,7 +846,8 @@ export function BeadPatternApp() {
     const gridLayout = getA4GridLayout();
     const totalGridPages =
       Math.ceil(pattern.width / gridLayout.colsPerPage) * Math.ceil(pattern.height / gridLayout.rowsPerPage);
-    drawA4Header(ctx, exportTitle, `源图 ${imageName}`, "封面 / 图例", "#1f9a94");
+    const totalLegendPages = getA4LegendPageCount();
+    drawA4Header(ctx, exportTitle, `源图 ${imageName}`, "封面 / 总览", "#1f9a94");
 
     drawCard(ctx, 72, 184, 700, 860, 24);
     ctx.fillStyle = "#111827";
@@ -796,7 +868,7 @@ export function BeadPatternApp() {
     drawMetricCard(ctx, 838, 270, 142, "尺寸", `${pattern.width} x ${pattern.height}`, "#eef8f6");
     drawMetricCard(ctx, 994, 270, 142, "豆数", formatCount(pattern.cells.length), "#fff4ec");
     drawMetricCard(ctx, 838, 404, 142, "色号", `${stats.length} 色`, "#f4f1ff");
-    drawMetricCard(ctx, 994, 404, 142, "页数", `${totalGridPages + 1} 页`, "#fff9de");
+    drawMetricCard(ctx, 994, 404, 142, "页数", `${totalGridPages + totalLegendPages + 1} 页`, "#fff9de");
 
     drawCard(ctx, 806, 638, 362, 406, 24);
     ctx.fillStyle = "#111827";
@@ -807,8 +879,8 @@ export function BeadPatternApp() {
     [
       "1. 按 A4 纵向打印。",
       "2. 分页网格按列号和行号对齐。",
-      "3. 每格内的文字为色号简码。",
-      "4. 图例统计用于备豆和补货。",
+      "3. 每格内的文字为完整色号。",
+      "4. 完整图例页用于备豆和补货。",
       "5. 建议先打印封面核对配色。",
     ].forEach((line, index) => {
       ctx.fillText(line, 838, 734 + index * 42);
@@ -818,10 +890,10 @@ export function BeadPatternApp() {
     ctx.fillStyle = "#111827";
     ctx.font = "800 24px Arial, PingFang SC, sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText("色号图例 / 用量", 106, 1148);
+    ctx.fillText("色号图例 / 用量预览", 106, 1148);
     ctx.fillStyle = "#5f6b7a";
     ctx.font = "13px Arial, PingFang SC, sans-serif";
-    ctx.fillText("按使用量排序，便于购买和核对库存。", 106, 1174);
+    ctx.fillText("完整图例见后续图例页；按使用量排序，便于购买和核对库存。", 106, 1174);
     const columns = 2;
     const rowHeight = 54;
     const columnWidth = 510;
@@ -832,18 +904,54 @@ export function BeadPatternApp() {
       const y = 1210 + row * rowHeight;
       if (y < 1542) drawLegendItem(ctx, x, y, 480, item);
     });
-    if (stats.length > 12) {
-      ctx.fillStyle = "#81909d";
-      ctx.font = "12px Arial, PingFang SC, sans-serif";
-      ctx.textAlign = "right";
-      ctx.fillText(`另有 ${stats.length - 12} 个色号，请查看 CSV 明细。`, 1132, 1564);
-    }
-
     ctx.fillStyle = "#81909d";
     ctx.font = "12px Arial, PingFang SC, sans-serif";
     ctx.textAlign = "center";
     ctx.fillText("Generated by Bead Pattern Studio", A4_CANVAS.width / 2, 1654);
     return canvas;
+  }
+
+  function makeA4LegendPages() {
+    if (!pattern) return [];
+    const pages: HTMLCanvasElement[] = [];
+    const columns = 2;
+    const rowsPerPage = 22;
+    const itemsPerPage = columns * rowsPerPage;
+    const totalPages = getA4LegendPageCount();
+    const columnWidth = 510;
+    const rowHeight = 56;
+
+    for (let pageIndex = 0; pageIndex < totalPages; pageIndex += 1) {
+      const page = makeA4Canvas();
+      if (!page) continue;
+      const { canvas, ctx } = page;
+      drawA4Header(ctx, exportTitle, "完整色号图例与用量", `图例 ${pageIndex + 1} / ${totalPages}`, "#1f9a94");
+      drawCard(ctx, 72, 196, 1096, 1348, 24);
+      ctx.fillStyle = "#111827";
+      ctx.font = "800 24px Arial, PingFang SC, sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText("完整色号图例 / 用量", 106, 248);
+      ctx.fillStyle = "#5f6b7a";
+      ctx.font = "13px Arial, PingFang SC, sans-serif";
+      ctx.fillText("请按这里核对色号、名称和所需颗数。", 106, 276);
+
+      stats.slice(pageIndex * itemsPerPage, (pageIndex + 1) * itemsPerPage).forEach((item, index) => {
+        const column = index % columns;
+        const row = Math.floor(index / columns);
+        const x = 106 + column * columnWidth;
+        const y = 314 + row * rowHeight;
+        drawLegendItem(ctx, x, y, 480, item);
+      });
+
+      ctx.fillStyle = "#81909d";
+      ctx.font = "12px Arial, PingFang SC, sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText(`${pattern.width} x ${pattern.height} / ${formatCount(pattern.cells.length)} 颗 / ${stats.length} 色`, A4_CANVAS.margin, A4_CANVAS.height - 58);
+      ctx.textAlign = "right";
+      ctx.fillText("Bead Pattern Studio", A4_CANVAS.width - A4_CANVAS.margin, A4_CANVAS.height - 58);
+      pages.push(canvas);
+    }
+    return pages;
   }
 
   function makeA4GridPages() {
@@ -900,10 +1008,7 @@ export function BeadPatternApp() {
             const y = gridY + row * cellSize;
             ctx.fillStyle = cell.hex;
             ctx.fillRect(x, y, cellSize, cellSize);
-            ctx.fillStyle = textColorForHex(cell.hex);
-            ctx.font = "700 8px Arial, sans-serif";
-            ctx.textAlign = "center";
-            ctx.fillText(cell.code.replace(/^[A-Z]+/, ""), x + cellSize / 2, y + cellSize / 2 + 1);
+            drawCenteredCellCode(ctx, cell.code, x, y, cellSize, cellSize, textColorForHex(cell.hex), 8);
           }
         }
 
@@ -955,14 +1060,15 @@ export function BeadPatternApp() {
     const canvas = makeExportCanvas();
     if (!canvas) return;
     canvas.toBlob((blob) => {
-      if (blob) downloadBlob(blob, `${exportFilename}-poster.png`);
+      if (blob) downloadBlob(blob, `${exportFilename}-pattern.png`);
     }, "image/png");
   }
 
   function exportPdf() {
     const summaryPage = makeA4SummaryPage();
+    const legendPages = makeA4LegendPages();
     const gridPages = makeA4GridPages();
-    const pages = [summaryPage, ...gridPages].filter((page): page is HTMLCanvasElement => Boolean(page));
+    const pages = [summaryPage, ...legendPages, ...gridPages].filter((page): page is HTMLCanvasElement => Boolean(page));
     if (!pages.length) return;
     const pdf = makePdfFromJpegPages(
       pages.map((page) => ({
@@ -972,33 +1078,6 @@ export function BeadPatternApp() {
       })),
     );
     downloadBlob(pdf, `${exportFilename}-a4.pdf`);
-  }
-
-  function exportCsv() {
-    if (!pattern) return;
-    const rows: string[][] = [];
-    rows.push(["section", "key", "value"]);
-    rows.push(["meta", "project_name", exportTitle]);
-    rows.push(["meta", "source", imageName]);
-    rows.push(["meta", "width", String(pattern.width)]);
-    rows.push(["meta", "height", String(pattern.height)]);
-    rows.push(["meta", "total_beads", String(pattern.cells.length)]);
-    rows.push([]);
-    rows.push(["palette_summary", "code", "name", "hex", "count"]);
-    for (const item of stats) {
-      rows.push(["palette_summary", item.code, item.color?.name ?? "", item.color?.hex ?? "", String(item.count)]);
-    }
-    rows.push([]);
-    rows.push(["grid_codes"]);
-    for (let y = 0; y < pattern.height; y += 1) {
-      const row = [];
-      for (let x = 0; x < pattern.width; x += 1) {
-        row.push(pattern.cells[y * pattern.width + x].code);
-      }
-      rows.push(row);
-    }
-    const csv = rows.map((row) => row.map(csvEscape).join(",")).join("\n");
-    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), `${exportFilename}.csv`);
   }
 
   return (
@@ -1125,9 +1204,8 @@ export function BeadPatternApp() {
             </div>
             <div className="export-actions">
               <button type="button" onClick={saveCurrentProject} disabled={!pattern}>保存</button>
-              <button type="button" onClick={exportPng} disabled={!pattern}>海报</button>
-              <button type="button" onClick={exportPdf} disabled={!pattern}>PDF</button>
-              <button type="button" onClick={exportCsv} disabled={!pattern}>CSV</button>
+              <button type="button" onClick={exportPng} disabled={!pattern}>PNG 图纸</button>
+              <button type="button" onClick={exportPdf} disabled={!pattern}>PDF 图纸</button>
             </div>
           </div>
 
