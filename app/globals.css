@@ -727,64 +727,37 @@ input[type="range"] {
   border-color: var(--teal-dark);
 }
 
-@media (max-width: 1180px) {
-  .workspace {
-    grid-template-columns: 320px minmax(0, 1fr);
-  }
-
-  .stats-panel {
-    grid-column: 1 / -1;
-  }
-
-  .palette-grid {
-    grid-template-columns: repeat(8, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 860px) {
+@media (max-width: 1500px) {
   .bead-app {
-    padding: 12px 12px calc(96px + env(safe-area-inset-bottom));
+    padding: 16px 16px calc(100px + env(safe-area-inset-bottom));
+  }
+
+  .hero,
+  .workspace {
+    max-width: 980px;
   }
 
   .hero {
-    grid-template-columns: 1fr;
-  }
-
-  .hero {
-    margin-bottom: 10px;
-    padding: 14px;
-  }
-
-  .eyebrow {
-    margin-bottom: 8px;
-    font-size: 11px;
-  }
-
-  .hero h1 {
-    font-size: 27px;
-  }
-
-  .hero-copy {
-    margin-top: 8px;
-    font-size: 14px;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .hero-meter {
     width: 100%;
     min-width: 0;
-    grid-template-columns: auto 1fr;
-    padding: 12px;
+    grid-template-columns: repeat(2, auto minmax(74px, 1fr));
   }
 
   .mobile-tabbar {
     position: fixed;
     z-index: 30;
-    right: 12px;
-    bottom: calc(10px + env(safe-area-inset-bottom));
-    left: 12px;
+    right: 16px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    left: 16px;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
+    max-width: 720px;
+    margin: 0 auto;
     padding: 6px;
     background: rgba(255, 255, 255, 0.94);
     border: 1px solid rgba(217, 225, 231, 0.9);
@@ -841,6 +814,123 @@ input[type="range"] {
 
   .panel,
   .pattern-stage {
+    padding: 16px;
+  }
+
+  .canvas-wrap {
+    min-height: min(58vh, 560px);
+    max-height: 64vh;
+  }
+
+  .stage-toolbar {
+    display: grid;
+    align-items: stretch;
+  }
+
+  .export-actions button {
+    flex: 1;
+  }
+
+  .paint-bar {
+    position: sticky;
+    bottom: 82px;
+    z-index: 8;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    margin-right: -6px;
+    margin-left: -6px;
+    box-shadow: 0 14px 34px rgba(17, 24, 39, 0.12);
+  }
+
+  .history-actions,
+  .edit-mode-toggle,
+  .selection-actions {
+    width: 100%;
+  }
+
+  .history-actions button,
+  .selection-actions button,
+  .edit-mode-toggle button {
+    flex: 1;
+  }
+
+  .selection-actions {
+    justify-content: stretch;
+  }
+
+  .swatch-large {
+    width: 100%;
+  }
+
+  .palette-grid {
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+    max-height: 34vh;
+  }
+
+  .stats-list {
+    max-height: 42vh;
+  }
+
+  .saved-project-actions {
+    justify-content: stretch;
+  }
+
+  .saved-project-actions button {
+    flex: 1;
+  }
+}
+
+@media (min-width: 1501px) and (max-width: 1580px) {
+  .workspace {
+    grid-template-columns: 320px minmax(0, 1fr);
+  }
+
+  .stats-panel {
+    grid-column: 1 / -1;
+  }
+
+  .palette-grid {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  .bead-app {
+    padding: 12px 12px calc(96px + env(safe-area-inset-bottom));
+  }
+
+  .hero {
+    grid-template-columns: 1fr;
+  }
+
+  .hero {
+    margin-bottom: 10px;
+    padding: 14px;
+  }
+
+  .eyebrow {
+    margin-bottom: 8px;
+    font-size: 11px;
+  }
+
+  .hero h1 {
+    font-size: 27px;
+  }
+
+  .hero-copy {
+    margin-top: 8px;
+    font-size: 14px;
+  }
+
+  .hero-meter {
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: auto 1fr;
+    padding: 12px;
+  }
+
+  .panel,
+  .pattern-stage {
     padding: 14px;
   }
 
@@ -864,31 +954,8 @@ input[type="range"] {
     flex: 1;
   }
 
-  .stage-toolbar {
-    display: grid;
-  }
-
-  .export-actions button {
-    flex: 1;
-  }
-
   .paint-bar {
-    position: sticky;
     bottom: 76px;
-    z-index: 8;
-    margin-right: -6px;
-    margin-left: -6px;
-    box-shadow: 0 14px 34px rgba(17, 24, 39, 0.12);
-  }
-
-  .history-actions,
-  .edit-mode-toggle,
-  .selection-actions {
-    width: 100%;
-  }
-
-  .history-actions button {
-    flex: 1;
   }
 
   .palette-grid {
