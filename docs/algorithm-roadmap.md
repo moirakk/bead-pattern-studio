@@ -104,8 +104,15 @@
 
 ## 推荐下一步工程任务
 
-1. 把当前算法从 React 组件中拆成纯函数。
-2. 为 RGB/Lab/nearestColor/buildPattern 写单元测试。
-3. 加入 `PatternEditHistory`，支持撤销/重做。
-4. 增加抖动开关。
-5. 增加 A4 分页 PDF 导出。
+已完成：
+
+- 把当前算法从 React 组件中拆成纯函数。
+- 为 RGB/Lab/nearestColor/buildPattern 写单元测试。
+
+下一步：
+
+1. 加入 `PatternEditHistory`，支持撤销/重做。
+2. 增加 A4 分页 PDF 导出。
+3. 增加抖动开关。
+4. 增加区域选择和批量换色。
+5. 增加透明背景处理策略。

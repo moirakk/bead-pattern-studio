@@ -1,29 +1,19 @@
 "use client";
 
 import { ChangeEvent, MouseEvent, useEffect, useMemo, useRef, useState } from "react";
-
-type RGB = { r: number; g: number; b: number };
-type Lab = { l: number; a: number; b: number };
-
-type BeadColor = {
-  code: string;
-  name: string;
-  hex: string;
-  rgb: RGB;
-  lab: Lab;
-};
-
-type Cell = {
-  code: string;
-  hex: string;
-  source: RGB;
-};
-
-type Pattern = {
-  width: number;
-  height: number;
-  cells: Cell[];
-};
+import {
+  buildPattern,
+  colorDistance,
+  hexToRgb,
+  makeDemoPalette,
+  paintPatternCell,
+  parsePaletteCsv,
+  rgbToLab,
+  summarizePattern,
+  type BeadColor,
+  type Pattern,
+  type RGB,
+} from "@/lib/pattern";
 
 type Crop = {
   x: number;
@@ -31,45 +21,6 @@ type Crop = {
   width: number;
   height: number;
 };
-
-const DEMO_PALETTE_RAW = [
-  ["A01", "Snow White", "#f7f5ef"],
-  ["A02", "Ivory", "#f2dfbf"],
-  ["A03", "Cream", "#e8c78c"],
-  ["A04", "Warm Sand", "#c89d62"],
-  ["A05", "Caramel", "#9f6438"],
-  ["A06", "Cocoa", "#5d3a2c"],
-  ["A07", "Black", "#171717"],
-  ["A08", "Ash Gray", "#7f8588"],
-  ["A09", "Silver", "#b9c0c4"],
-  ["A10", "Blush", "#f4b5aa"],
-  ["A11", "Peach", "#f18e71"],
-  ["A12", "Coral", "#e7584f"],
-  ["A13", "Cherry", "#b82335"],
-  ["A14", "Wine", "#6e1f34"],
-  ["A15", "Apricot", "#f6b25c"],
-  ["A16", "Orange", "#ed7624"],
-  ["A17", "Sun Yellow", "#f4d34f"],
-  ["A18", "Lemon", "#f2ec78"],
-  ["A19", "Olive", "#888a3d"],
-  ["A20", "Leaf", "#5da85b"],
-  ["A21", "Mint", "#83cfa5"],
-  ["A22", "Teal", "#2d9c98"],
-  ["A23", "Deep Teal", "#156b70"],
-  ["A24", "Sky", "#79bee9"],
-  ["A25", "Azure", "#2f8dcc"],
-  ["A26", "Cobalt", "#2454a6"],
-  ["A27", "Navy", "#172d64"],
-  ["A28", "Lavender", "#b3a0dc"],
-  ["A29", "Violet", "#7656b6"],
-  ["A30", "Plum", "#54306d"],
-  ["A31", "Rose", "#df7aa6"],
-  ["A32", "Hot Pink", "#cf3e7b"],
-  ["A33", "Skin Light", "#f1c6a5"],
-  ["A34", "Skin Mid", "#d99a76"],
-  ["A35", "Skin Deep", "#9b5d45"],
-  ["A36", "Transparent Blue", "#a9d9f4"],
-];
 
 const TECH_CARDS = [
   {
@@ -89,137 +40,6 @@ const TECH_CARDS = [
     body: "后续可把转换函数放入 Web Worker；色卡接店铺后台；项目保存到 IndexedDB/云端；同一核心模块可移植到小程序或 App。",
   },
 ];
-
-function hexToRgb(hex: string): RGB {
-  const clean = hex.replace("#", "").trim();
-  const value = Number.parseInt(clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean, 16);
-  return {
-    r: (value >> 16) & 255,
-    g: (value >> 8) & 255,
-    b: value & 255,
-  };
-}
-
-function rgbToHex(rgb: RGB): string {
-  return `#${[rgb.r, rgb.g, rgb.b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("")}`;
-}
-
-function pivotRgb(value: number) {
-  const channel = value / 255;
-  return channel > 0.04045 ? Math.pow((channel + 0.055) / 1.055, 2.4) : channel / 12.92;
-}
-
-function pivotXyz(value: number) {
-  return value > 0.008856 ? Math.cbrt(value) : 7.787 * value + 16 / 116;
-}
-
-function rgbToLab(rgb: RGB): Lab {
-  const r = pivotRgb(rgb.r);
-  const g = pivotRgb(rgb.g);
-  const b = pivotRgb(rgb.b);
-  const x = (r * 0.4124 + g * 0.3576 + b * 0.1805) / 0.95047;
-  const y = (r * 0.2126 + g * 0.7152 + b * 0.0722) / 1;
-  const z = (r * 0.0193 + g * 0.1192 + b * 0.9505) / 1.08883;
-  const fx = pivotXyz(x);
-  const fy = pivotXyz(y);
-  const fz = pivotXyz(z);
-  return {
-    l: 116 * fy - 16,
-    a: 500 * (fx - fy),
-    b: 200 * (fy - fz),
-  };
-}
-
-function colorDistance(a: Lab, b: Lab) {
-  return Math.hypot(a.l - b.l, a.a - b.a, a.b - b.b);
-}
-
-function createBeadColor(code: string, name: string, hex: string): BeadColor {
-  const normalizedHex = hex.startsWith("#") ? hex : `#${hex}`;
-  const rgb = hexToRgb(normalizedHex);
-  return {
-    code: code.trim(),
-    name: name.trim() || code.trim(),
-    hex: normalizedHex.toLowerCase(),
-    rgb,
-    lab: rgbToLab(rgb),
-  };
-}
-
-function makeDemoPalette() {
-  return DEMO_PALETTE_RAW.map(([code, name, hex]) => createBeadColor(code, name, hex));
-}
-
-function nearestColor(rgb: RGB, palette: BeadColor[]) {
-  const lab = rgbToLab(rgb);
-  let winner = palette[0];
-  let best = Number.POSITIVE_INFINITY;
-  for (const color of palette) {
-    const score = colorDistance(lab, color.lab);
-    if (score < best) {
-      best = score;
-      winner = color;
-    }
-  }
-  return winner;
-}
-
-function buildPattern(sourcePixels: RGB[], width: number, height: number, palette: BeadColor[], colorLimit: number): Pattern {
-  const initialCodes = sourcePixels.map((pixel) => nearestColor(pixel, palette).code);
-  const counts = new Map<string, number>();
-  for (const code of initialCodes) {
-    counts.set(code, (counts.get(code) ?? 0) + 1);
-  }
-
-  const allowedCodes = [...counts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, Math.max(1, Math.min(colorLimit, palette.length)))
-    .map(([code]) => code);
-  const allowedPalette = palette.filter((color) => allowedCodes.includes(color.code));
-
-  return {
-    width,
-    height,
-    cells: sourcePixels.map((pixel) => {
-      const color = nearestColor(pixel, allowedPalette.length ? allowedPalette : palette);
-      return { code: color.code, hex: color.hex, source: pixel };
-    }),
-  };
-}
-
-function parsePaletteCsv(text: string) {
-  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  const parsed: BeadColor[] = [];
-  for (const line of lines) {
-    const parts = line.split(",").map((part) => part.trim());
-    if (parts.length < 2) continue;
-    const [first, second, third] = parts;
-    if (/^code$/i.test(first) || /^色号$/.test(first)) continue;
-    const code = first;
-    const maybeHex = third ?? second;
-    const name = third ? second : first;
-    if (!/^#?[0-9a-f]{6}$/i.test(maybeHex)) continue;
-    parsed.push(createBeadColor(code, name, maybeHex));
-  }
-  return parsed;
-}
-
-function summarize(pattern: Pattern | null, palette: BeadColor[]) {
-  if (!pattern) return [];
-  const colorByCode = new Map(palette.map((color) => [color.code, color]));
-  const counts = new Map<string, number>();
-  for (const cell of pattern.cells) {
-    counts.set(cell.code, (counts.get(cell.code) ?? 0) + 1);
-  }
-  return [...counts.entries()]
-    .map(([code, count]) => ({
-      code,
-      count,
-      color: colorByCode.get(code),
-      percent: count / pattern.cells.length,
-    }))
-    .sort((a, b) => b.count - a.count);
-}
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -328,7 +148,7 @@ export function BeadPatternApp() {
     () => palette.find((color) => color.code === selectedCode) ?? palette[0],
     [palette, selectedCode],
   );
-  const stats = useMemo(() => summarize(pattern, palette), [pattern, palette]);
+  const stats = useMemo(() => summarizePattern(pattern, palette), [pattern, palette]);
   const totalBeans = pattern ? pattern.width * pattern.height : gridWidth * gridHeight;
 
   useEffect(() => {
@@ -489,12 +309,7 @@ export function BeadPatternApp() {
 
   function paintCell(index: number) {
     if (!pattern || !selectedColor) return;
-    setPattern({
-      ...pattern,
-      cells: pattern.cells.map((cell, cellIndex) =>
-        cellIndex === index ? { ...cell, code: selectedColor.code, hex: selectedColor.hex } : cell,
-      ),
-    });
+    setPattern(paintPatternCell(pattern, index, selectedColor));
     setActiveCell(index);
   }
 
@@ -510,7 +325,7 @@ export function BeadPatternApp() {
 
   function makeExportCanvas() {
     if (!pattern) return null;
-    const legend = summarize(pattern, palette);
+    const legend = summarizePattern(pattern, palette);
     const margin = 72;
     const label = 34;
     const cellSize = Math.max(10, Math.min(28, Math.floor(1200 / Math.max(pattern.width, pattern.height))));
