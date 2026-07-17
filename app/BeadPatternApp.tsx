@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, FormEvent, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { CommunityDiscover } from "@/app/CommunityDiscover";
 import { makePdfFromJpegPages } from "@/lib/export/pdf";
 import { createProjectPosterBlob } from "@/lib/export/project-poster";
 import { deliverExportFile, selectionHaptic } from "@/lib/native/share";
@@ -49,7 +50,7 @@ import {
 
 type EditMode = "paint" | "select";
 
-type MobilePanel = "setup" | "pattern" | "palette" | "works";
+type MobilePanel = "setup" | "pattern" | "palette" | "discover" | "works";
 
 type SelectionDraft = {
   startX: number;
@@ -208,6 +209,7 @@ export function BeadPatternApp() {
   const [projectSort, setProjectSort] = useState<ProjectSort>("latest");
   const [projectCategoryFilter, setProjectCategoryFilter] = useState<ProjectCategoryFilter>("全部分类");
   const [sharingProjectId, setSharingProjectId] = useState<string | null>(null);
+  const [communityPreviewProjectId, setCommunityPreviewProjectId] = useState<string | null>(null);
   const [portfolioNotice, setPortfolioNotice] = useState("正在读取当前设备的作品库...");
   const [activeMobilePanel, setActiveMobilePanel] = useState<MobilePanel>("setup");
   const [status, setStatus] = useState("上传图片后会自动生成图纸。");
@@ -238,6 +240,10 @@ export function BeadPatternApp() {
   const visibleProjects = useMemo(
     () => filterAndSortProjects(savedProjects, projectQuery, projectSort, projectCategoryFilter),
     [savedProjects, projectQuery, projectSort, projectCategoryFilter],
+  );
+  const communityPreviewProject = useMemo(
+    () => savedProjects.find((project) => project.id === communityPreviewProjectId) ?? null,
+    [savedProjects, communityPreviewProjectId],
   );
   const canUndo = canUndoPattern(patternHistory);
   const canRedo = canRedoPattern(patternHistory);
@@ -603,6 +609,7 @@ export function BeadPatternApp() {
       setSavedProjects(nextProjects);
       setPendingDeleteProjectId(null);
       if (editingProjectId === projectId) setEditingProjectId(null);
+      if (communityPreviewProjectId === projectId) setCommunityPreviewProjectId(null);
       setPortfolioNotice("已删除本地保存的作品。");
       setStatus("已删除本地保存的作品。");
     } catch {
@@ -673,6 +680,12 @@ export function BeadPatternApp() {
     } finally {
       setSharingProjectId(null);
     }
+  }
+
+  function openCommunityPreview(project: SavedProject) {
+    setCommunityPreviewProjectId(project.id);
+    setActiveMobilePanel("discover");
+    setPendingDeleteProjectId(null);
   }
 
   function exportProjectsBackup() {
@@ -1341,6 +1354,15 @@ export function BeadPatternApp() {
         </button>
         <button
           type="button"
+          className={activeMobilePanel === "discover" ? "active" : ""}
+          aria-pressed={activeMobilePanel === "discover"}
+          onClick={() => setActiveMobilePanel("discover")}
+        >
+          <span>发现</span>
+          <small>社区预览</small>
+        </button>
+        <button
+          type="button"
           className={activeMobilePanel === "works" ? "active" : ""}
           aria-pressed={activeMobilePanel === "works"}
           onClick={() => setActiveMobilePanel("works")}
@@ -1594,6 +1616,10 @@ export function BeadPatternApp() {
 
         </aside>
 
+        <section className={`panel discover-panel mobile-panel ${activeMobilePanel === "discover" ? "mobile-panel-active" : ""}`}>
+          <CommunityDiscover previewProject={communityPreviewProject} onClearPreview={() => setCommunityPreviewProjectId(null)} />
+        </section>
+
         <section className={`panel projects-panel mobile-panel ${activeMobilePanel === "works" ? "mobile-panel-active" : ""}`}>
           <div className="portfolio-header">
             <div className="panel-title">
@@ -1706,6 +1732,9 @@ export function BeadPatternApp() {
                     </button>
                     <button type="button" onClick={() => void shareSavedProject(project)} disabled={sharingProjectId === project.id}>
                       {sharingProjectId === project.id ? "生成中" : "分享海报"}
+                    </button>
+                    <button type="button" onClick={() => openCommunityPreview(project)}>
+                      社区预览
                     </button>
                     <button type="button" onClick={() => startProjectRename(project)}>
                       重命名

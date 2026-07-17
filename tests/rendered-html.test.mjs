@@ -41,5 +41,7 @@ test("server-renders the bead pattern studio shell", async () => {
   assert.match(html, /搜索作品名称/);
   assert.match(html, /按最近保存/);
   assert.match(html, /全部分类/);
+  assert.match(html, /发现拼豆灵感/);
+  assert.match(html, /示例内容 · 暂未公开发布/);
   assert.doesNotMatch(html, /Your site is taking shape|react-loading-skeleton|codex-preview/i);
 });

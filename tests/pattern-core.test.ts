@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { COMMUNITY_SAMPLE_POSTS, createPreviewPattern, selectCommunityPosts } from "../lib/community/feed";
 import { makePdfFromJpegPages } from "../lib/export/pdf";
 import { calculatePosterPatternRect } from "../lib/export/project-poster";
 import { createProjectBackup, mergeSavedProjects, parseProjectBackup, type SavedProject } from "../lib/projects/backup";
@@ -313,4 +314,16 @@ test("updates project categories and calculates bounded poster previews", () => 
   assert.ok(tall.width <= 860 && tall.height <= 650);
   assert.equal(wide.width / wide.height, 2);
   assert.equal(tall.height / tall.width, 2);
+});
+
+test("builds and filters the community preview feed", () => {
+  const pattern = createPreviewPattern(3, 2, (x, y) => x === y ? "#000000" : "#ffffff");
+  const latest = selectCommunityPosts(COMMUNITY_SAMPLE_POSTS, "latest", "全部分类", new Set());
+  const flowers = selectCommunityPosts(COMMUNITY_SAMPLE_POSTS, "popular", "花卉", new Set());
+  const saved = selectCommunityPosts(COMMUNITY_SAMPLE_POSTS, "saved", "全部分类", new Set(["sample-duck"]));
+
+  assert.equal(pattern.cells.length, 6);
+  assert.equal(latest[0].id, "sample-mountain");
+  assert.ok(flowers.every((post) => post.category === "花卉"));
+  assert.deepEqual(saved.map((post) => post.id), ["sample-duck"]);
 });
