@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { makePdfFromJpegPages } from "../lib/export/pdf";
 import { createProjectBackup, mergeSavedProjects, parseProjectBackup, type SavedProject } from "../lib/projects/backup";
+import { loadSavedProjects, saveSavedProjects } from "../lib/projects/storage";
 import {
   buildPattern,
   canRedoPattern,
@@ -232,4 +233,40 @@ test("merges project backups by id and keeps the newest copy", () => {
   assert.equal(merged.length, 2);
   assert.equal(merged[0].savedAt, newProject.savedAt);
   assert.equal(merged.find((project) => project.id === "same")?.savedAt, newProject.savedAt);
+});
+
+function makeMemoryStorage(): Storage {
+  const values = new Map<string, string>();
+  return {
+    get length() {
+      return values.size;
+    },
+    clear() {
+      values.clear();
+    },
+    getItem(key) {
+      return values.get(key) ?? null;
+    },
+    key(index) {
+      return [...values.keys()][index] ?? null;
+    },
+    removeItem(key) {
+      values.delete(key);
+    },
+    setItem(key, value) {
+      values.set(key, value);
+    },
+  };
+}
+
+test("falls back to local storage when IndexedDB is unavailable", async () => {
+  const localStorage = makeMemoryStorage();
+  const project = makeSavedProject("offline", "2026-07-17T10:00:00.000Z");
+
+  const backend = await saveSavedProjects([project], { indexedDB: null, localStorage });
+  const loaded = await loadSavedProjects(100, { indexedDB: null, localStorage });
+
+  assert.equal(backend, "localstorage");
+  assert.equal(loaded.backend, "localstorage");
+  assert.deepEqual(loaded.projects, [project]);
 });

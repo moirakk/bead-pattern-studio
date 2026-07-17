@@ -763,6 +763,13 @@ input[type="range"] {
   border-color: var(--line);
 }
 
+.portfolio-actions label[aria-disabled="true"] {
+  color: var(--muted);
+  background: #eef2f4;
+  border-color: var(--line);
+  cursor: default;
+}
+
 .portfolio-notice {
   margin: 12px 0 0;
   padding: 10px 12px;

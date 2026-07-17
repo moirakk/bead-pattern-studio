@@ -66,13 +66,17 @@ export function parseProjectBackup(text: string): SavedProject[] {
   if (!isRecord(parsed) || parsed.format !== BACKUP_FORMAT || parsed.version !== BACKUP_VERSION) {
     throw new Error("无法识别这个备份文件或版本。");
   }
-  if (!Array.isArray(parsed.projects) || parsed.projects.length > MAX_BACKUP_PROJECTS) {
-    throw new Error("备份中的作品数量无效。");
+  return parseSavedProjectCollection(parsed.projects);
+}
+
+export function parseSavedProjectCollection(value: unknown): SavedProject[] {
+  if (!Array.isArray(value) || value.length > MAX_BACKUP_PROJECTS) {
+    throw new Error("作品数量无效。");
   }
 
-  const projects = parsed.projects.map(parseSavedProject);
+  const projects = value.map(parseSavedProject);
   if (projects.some((project) => project === null)) {
-    throw new Error("备份中有损坏或不完整的作品。");
+    throw new Error("作品数据有损坏或不完整。");
   }
   return projects as SavedProject[];
 }

@@ -11,6 +11,7 @@ import {
   type PaletteSourceKind,
   type SavedProject,
 } from "@/lib/projects/backup";
+import { loadSavedProjects, saveSavedProjects } from "@/lib/projects/storage";
 import {
   buildPattern,
   canRedoPattern,
@@ -56,8 +57,7 @@ const A4_CANVAS = {
   margin: 72,
 };
 
-const SAVED_PROJECTS_KEY = "bead-pattern-studio.saved-projects.v1";
-const MAX_SAVED_PROJECTS = 12;
+const MAX_SAVED_PROJECTS = 100;
 
 function stripFileExtension(filename: string) {
   return filename.replace(/\.[^/.]+$/, "");
@@ -66,19 +66,6 @@ function stripFileExtension(filename: string) {
 function makeSafeFilename(value: string) {
   const trimmed = value.trim() || "bead-pattern";
   return trimmed.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "-").slice(0, 80);
-}
-
-function readSavedProjects() {
-  try {
-    const raw = window.localStorage.getItem(SAVED_PROJECTS_KEY);
-    return raw ? (JSON.parse(raw) as SavedProject[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeSavedProjects(projects: SavedProject[]) {
-  window.localStorage.setItem(SAVED_PROJECTS_KEY, JSON.stringify(projects));
 }
 
 function formatCount(value: number) {
@@ -201,11 +188,10 @@ export function BeadPatternApp() {
   const [editMode, setEditMode] = useState<EditMode>("paint");
   const [selection, setSelection] = useState<SelectionDraft | null>(null);
   const [isSelecting, setIsSelecting] = useState(false);
-  const [savedProjects, setSavedProjects] = useState<SavedProject[]>(() =>
-    typeof window === "undefined" ? [] : readSavedProjects(),
-  );
+  const [savedProjects, setSavedProjects] = useState<SavedProject[]>([]);
+  const [projectsReady, setProjectsReady] = useState(false);
   const [pendingDeleteProjectId, setPendingDeleteProjectId] = useState<string | null>(null);
-  const [portfolioNotice, setPortfolioNotice] = useState("作品仅保存在当前设备，建议定期导出备份。");
+  const [portfolioNotice, setPortfolioNotice] = useState("正在读取当前设备的作品库...");
   const [activeMobilePanel, setActiveMobilePanel] = useState<MobilePanel>("setup");
   const [status, setStatus] = useState("上传图片后会自动生成图纸。");
   const sourcePreviewRef = useRef<HTMLCanvasElement | null>(null);
@@ -243,6 +229,31 @@ export function BeadPatternApp() {
     return { x, y, width: endX - x + 1, height: endY - y + 1 };
   }, [selection]);
   const selectedAreaCount = selectedArea ? selectedArea.width * selectedArea.height : 0;
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadSavedProjects(MAX_SAVED_PROJECTS)
+      .then(({ projects, backend, migrated }) => {
+        if (cancelled) return;
+        setSavedProjects(projects);
+        setProjectsReady(true);
+        if (migrated) {
+          setPortfolioNotice(`已将 ${projects.length} 个旧作品迁移到新版作品库。`);
+        } else if (backend === "localstorage") {
+          setPortfolioNotice("作品已从当前设备载入；建议定期导出备份。");
+        } else {
+          setPortfolioNotice("作品保存在当前设备；建议定期导出备份。");
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setProjectsReady(true);
+        setPortfolioNotice("作品库读取失败，可通过备份文件恢复作品。");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!sourceImage) return;
@@ -474,7 +485,7 @@ export function BeadPatternApp() {
     return canvas.toDataURL("image/jpeg", 0.82);
   }
 
-  function saveCurrentProject() {
+  async function saveCurrentProject() {
     if (!pattern) {
       setStatus("请先生成图纸，再保存作品。");
       return;
@@ -504,13 +515,13 @@ export function BeadPatternApp() {
       },
       thumbnail: makeSavedProjectThumbnail(pattern),
     };
-    const existing = readSavedProjects().filter((project) => project.id !== savedProject.id);
+    const existing = savedProjects.filter((project) => project.id !== savedProject.id);
     const nextProjects = [savedProject, ...existing].slice(0, MAX_SAVED_PROJECTS);
     try {
-      writeSavedProjects(nextProjects);
+      await saveSavedProjects(nextProjects);
     } catch {
-      setPortfolioNotice("设备存储空间不足，请先备份并删除部分旧作品。");
-      setStatus("保存失败：设备存储空间不足。");
+      setPortfolioNotice("设备无法保存作品，请先导出备份并释放存储空间。");
+      setStatus("保存失败：设备存储不可用。");
       return;
     }
     setSavedProjects(nextProjects);
@@ -563,13 +574,17 @@ export function BeadPatternApp() {
     drawFittedText(ctx, paletteSourceText, A4_CANVAS.margin, 174, A4_CANVAS.width - A4_CANVAS.margin * 2);
   }
 
-  function deleteSavedProject(projectId: string) {
+  async function deleteSavedProject(projectId: string) {
     const nextProjects = savedProjects.filter((project) => project.id !== projectId);
-    writeSavedProjects(nextProjects);
-    setSavedProjects(nextProjects);
-    setPendingDeleteProjectId(null);
-    setPortfolioNotice("已删除本地保存的作品。");
-    setStatus("已删除本地保存的作品。");
+    try {
+      await saveSavedProjects(nextProjects);
+      setSavedProjects(nextProjects);
+      setPendingDeleteProjectId(null);
+      setPortfolioNotice("已删除本地保存的作品。");
+      setStatus("已删除本地保存的作品。");
+    } catch {
+      setPortfolioNotice("删除失败，请稍后重试。");
+    }
   }
 
   function exportProjectsBackup() {
@@ -588,27 +603,24 @@ export function BeadPatternApp() {
       .catch(() => setPortfolioNotice("备份导出失败，请重试。"));
   }
 
-  function importProjectsBackup(event: ChangeEvent<HTMLInputElement>) {
+  async function importProjectsBackup(event: ChangeEvent<HTMLInputElement>) {
     const input = event.currentTarget;
     const file = input.files?.[0];
     if (!file) return;
 
-    file.text()
-      .then((text) => {
-        const imported = parseProjectBackup(text);
-        const nextProjects = mergeSavedProjects(readSavedProjects(), imported, MAX_SAVED_PROJECTS);
-        writeSavedProjects(nextProjects);
-        setSavedProjects(nextProjects);
-        setPendingDeleteProjectId(null);
-        setPortfolioNotice(`已导入 ${imported.length} 个作品，当前共有 ${nextProjects.length} 个。`);
-        void selectionHaptic();
-      })
-      .catch((error: unknown) => {
-        setPortfolioNotice(error instanceof Error ? error.message : "备份导入失败，请检查文件。");
-      })
-      .finally(() => {
-        input.value = "";
-      });
+    try {
+      const imported = parseProjectBackup(await file.text());
+      const nextProjects = mergeSavedProjects(savedProjects, imported, MAX_SAVED_PROJECTS);
+      await saveSavedProjects(nextProjects);
+      setSavedProjects(nextProjects);
+      setPendingDeleteProjectId(null);
+      setPortfolioNotice(`已导入 ${imported.length} 个作品，当前共有 ${nextProjects.length} 个。`);
+      void selectionHaptic();
+    } catch (error: unknown) {
+      setPortfolioNotice(error instanceof Error ? error.message : "备份导入失败，请检查文件。");
+    } finally {
+      input.value = "";
+    }
   }
 
   function showSetupPanel() {
@@ -1357,7 +1369,7 @@ export function BeadPatternApp() {
               <p>{status}</p>
             </div>
             <div className="export-actions">
-              <button type="button" onClick={saveCurrentProject} disabled={!pattern || !hasUsablePalette}>保存</button>
+              <button type="button" onClick={saveCurrentProject} disabled={!projectsReady || !pattern || !hasUsablePalette}>保存</button>
               <button type="button" onClick={exportPng} disabled={!pattern || !hasUsablePalette}>PNG 图纸</button>
               <button type="button" onClick={exportPdf} disabled={!pattern || !hasUsablePalette}>PDF 图纸</button>
             </div>
@@ -1504,11 +1516,11 @@ export function BeadPatternApp() {
               </div>
             </div>
             <div className="portfolio-actions">
-              <label>
+              <label aria-disabled={!projectsReady}>
                 导入备份
-                <input type="file" accept=".beadproject,application/json" onChange={importProjectsBackup} />
+                <input type="file" accept=".beadproject,application/json" onChange={importProjectsBackup} disabled={!projectsReady} />
               </label>
-              <button type="button" onClick={exportProjectsBackup} disabled={!savedProjects.length}>备份作品</button>
+              <button type="button" onClick={exportProjectsBackup} disabled={!projectsReady || !savedProjects.length}>备份作品</button>
               <button type="button" onClick={showSetupPanel}>添加作品</button>
             </div>
           </div>
