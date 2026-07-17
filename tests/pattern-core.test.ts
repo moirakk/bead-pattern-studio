@@ -86,8 +86,8 @@ test("summarizes and edits pattern cells", () => {
   );
 
   const summary = summarizePattern(pattern, palette);
-  assert.equal(summary[0].code, "W");
-  assert.equal(summary[0].count, 2);
+  assert.deepEqual(summary.map((item) => item.code), ["B", "R", "W"]);
+  assert.equal(summary.find((item) => item.code === "W")?.count, 2);
 
   const edited = paintPatternCell(pattern, 0, blue);
   assert.equal(edited.cells[0].code, "BL");
@@ -96,6 +96,27 @@ test("summarizes and edits pattern cells", () => {
   const areaEdited = paintPatternArea(pattern, { x: 0, y: 0, width: 2, height: 1 }, red);
   assert.deepEqual(areaEdited.cells.map((cell) => cell.code), ["R", "R", "B", "R"]);
   assert.equal(pattern.cells[0].code, "W");
+});
+
+test("summarizes colors by natural color code order", () => {
+  const sortedPalette = [
+    createBeadColor("A1", "A1", "#111111"),
+    createBeadColor("A2", "A2", "#222222"),
+    createBeadColor("A10", "A10", "#aaaaaa"),
+    createBeadColor("B1", "B1", "#bbbbbb"),
+  ];
+  const pattern = {
+    width: 4,
+    height: 1,
+    cells: [
+      { code: "B1", hex: "#bbbbbb", source: { r: 187, g: 187, b: 187 } },
+      { code: "A10", hex: "#aaaaaa", source: { r: 170, g: 170, b: 170 } },
+      { code: "A2", hex: "#222222", source: { r: 34, g: 34, b: 34 } },
+      { code: "A1", hex: "#111111", source: { r: 17, g: 17, b: 17 } },
+    ],
+  };
+
+  assert.deepEqual(summarizePattern(pattern, sortedPalette).map((item) => item.code), ["A1", "A2", "A10", "B1"]);
 });
 
 test("tracks pattern undo and redo history", () => {

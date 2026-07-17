@@ -179,5 +179,5 @@ export function summarizePattern(pattern: Pattern | null, palette: BeadColor[]):
       color: colorByCode.get(code),
       percent: count / pattern.cells.length,
     }))
-    .sort((a, b) => b.count - a.count);
+    .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: "base" }));
 }

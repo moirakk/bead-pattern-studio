@@ -904,7 +904,7 @@ export function BeadPatternApp() {
     const colorByCode = new Map(palette.map((color) => [color.code, color]));
     return [...counts.entries()]
       .map(([code, count]) => ({ code, count, color: colorByCode.get(code), percent: count / (cols * rows) }))
-      .sort((a, b) => b.count - a.count);
+      .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: "base" }));
   }
 
   function makeA4SummaryPage() {
