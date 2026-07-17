@@ -31,6 +31,7 @@ https://bead-pattern-studio.moirahou1.chatgpt.site
 - [产品计划](docs/product-plan.md)
 - [技术架构](docs/technical-architecture.md)
 - [色卡数据规范](docs/palette-format.md)
+- [色号来源交叉验证](docs/color-source-audit.md)
 - [算法路线图](docs/algorithm-roadmap.md)
 
 ## 本地开发

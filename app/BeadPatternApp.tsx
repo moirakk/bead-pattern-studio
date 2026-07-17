@@ -42,6 +42,8 @@ type SelectionDraft = {
   endY: number;
 };
 
+type PaletteSourceKind = "demo" | "imported";
+
 type SavedProject = {
   id: string;
   title: string;
@@ -56,9 +58,14 @@ type SavedProject = {
     ditherMode: DitherMode;
     crop: Crop;
     selectedCode: string;
+    paletteName?: string;
+    paletteSourceKind?: PaletteSourceKind;
   };
   thumbnail: string;
 };
+
+const DEMO_PALETTE_NAME = "演示色卡（非官方占位）";
+const DEMO_PALETTE_WARNING = "当前为演示色卡，A01/A02 等色号不对应官方/店铺真实色号；正式制作前请导入店铺真实 CSV。";
 
 const TECH_CARDS = [
   {
@@ -222,6 +229,8 @@ function drawCenteredCellCode(
 
 export function BeadPatternApp() {
   const [palette, setPalette] = useState<BeadColor[]>(makeDemoPalette);
+  const [paletteName, setPaletteName] = useState(DEMO_PALETTE_NAME);
+  const [paletteSourceKind, setPaletteSourceKind] = useState<PaletteSourceKind>("demo");
   const [sourceImage, setSourceImage] = useState<HTMLImageElement | null>(null);
   const [imageName, setImageName] = useState("未上传图片");
   const [projectTitle, setProjectTitle] = useState("未命名拼豆图纸");
@@ -253,6 +262,8 @@ export function BeadPatternApp() {
   const stats = useMemo(() => summarizePattern(pattern, palette), [pattern, palette]);
   const exportTitle = projectTitle.trim() || stripFileExtension(imageName) || "未命名拼豆图纸";
   const exportFilename = makeSafeFilename(exportTitle);
+  const isDemoPalette = paletteSourceKind === "demo";
+  const paletteSourceText = isDemoPalette ? DEMO_PALETTE_WARNING : `色卡来源：${paletteName}（用户导入，请以店铺/品牌原始色卡为准）`;
   const totalBeans = pattern ? pattern.width * pattern.height : gridWidth * gridHeight;
   const canUndo = canUndoPattern(patternHistory);
   const canRedo = canRedoPattern(patternHistory);
@@ -439,9 +450,11 @@ export function BeadPatternApp() {
       const parsed = parsePaletteCsv(text);
       if (parsed.length) {
         setPalette(parsed);
+        setPaletteName(stripFileExtension(file.name) || file.name);
+        setPaletteSourceKind("imported");
         setSelectedCode(parsed[0].code);
         setColorLimit(Math.min(colorLimit, parsed.length));
-        setStatus(`已导入 ${parsed.length} 个店铺色号。`);
+        setStatus(`已导入 ${parsed.length} 个店铺色号。请确认 CSV 来自实际可购买色卡。`);
       } else {
         setStatus("色卡 CSV 未识别：请使用 code,name,hex 或 code,hex。");
       }
@@ -493,6 +506,8 @@ export function BeadPatternApp() {
         ditherMode,
         crop,
         selectedCode,
+        paletteName,
+        paletteSourceKind,
       },
       thumbnail: makeSavedProjectThumbnail(pattern),
     };
@@ -508,6 +523,8 @@ export function BeadPatternApp() {
     setProjectTitle(project.title);
     setImageName(project.sourceName);
     setPalette(project.palette);
+    setPaletteName(project.settings.paletteName ?? DEMO_PALETTE_NAME);
+    setPaletteSourceKind(project.settings.paletteSourceKind ?? "demo");
     setGridWidth(project.settings.gridWidth);
     setGridHeight(project.settings.gridHeight);
     setColorLimit(project.settings.colorLimit);
@@ -519,6 +536,27 @@ export function BeadPatternApp() {
     setSelection(null);
     setIsSelecting(false);
     setStatus(`已恢复作品「${project.title}」，可继续编辑或导出。`);
+  }
+
+  function drawPaletteSourceNotice(ctx: CanvasRenderingContext2D, x: number, y: number, width: number) {
+    const fill = isDemoPalette ? "#fff1e8" : "#eef8f6";
+    const stroke = isDemoPalette ? "#ff9b74" : "#91d7d1";
+    const text = isDemoPalette ? "#8a2d13" : "#146b70";
+    fillRoundedRect(ctx, x, y, width, 42, 12, fill);
+    strokeRoundedRect(ctx, x, y, width, 42, 12, stroke);
+    ctx.fillStyle = text;
+    ctx.font = "700 13px Arial, PingFang SC, sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    drawFittedText(ctx, paletteSourceText, x + 16, y + 23, width - 32);
+  }
+
+  function drawA4PaletteSourceLine(ctx: CanvasRenderingContext2D) {
+    ctx.fillStyle = isDemoPalette ? "#9a3412" : "#146b70";
+    ctx.font = "700 12px Arial, PingFang SC, sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    drawFittedText(ctx, paletteSourceText, A4_CANVAS.margin, 174, A4_CANVAS.width - A4_CANVAS.margin * 2);
   }
 
   function deleteSavedProject(projectId: string) {
@@ -610,7 +648,7 @@ export function BeadPatternApp() {
     const gridW = pattern.width * cellSize;
     const gridH = pattern.height * cellSize;
     const legendW = 430;
-    const headerH = 190;
+    const headerH = 240;
     const footerH = 80;
     const legendRows = Math.max(legend.length, Math.ceil((gridH - 60) / 42));
     const canvasW = margin + label + gridW + 54 + legendW + margin;
@@ -641,6 +679,7 @@ export function BeadPatternApp() {
     ctx.font = "700 15px Arial, PingFang SC, sans-serif";
     ctx.textAlign = "right";
     ctx.fillText(`${pattern.width} x ${pattern.height} / ${formatCount(pattern.cells.length)} 颗 / ${legend.length} 色`, canvas.width - margin - 28, 90);
+    drawPaletteSourceNotice(ctx, margin, 176, canvas.width - margin * 2);
 
     const gridX = margin + label;
     const gridY = headerH + label;
@@ -848,6 +887,7 @@ export function BeadPatternApp() {
       Math.ceil(pattern.width / gridLayout.colsPerPage) * Math.ceil(pattern.height / gridLayout.rowsPerPage);
     const totalLegendPages = getA4LegendPageCount();
     drawA4Header(ctx, exportTitle, `源图 ${imageName}`, "封面 / 总览", "#1f9a94");
+    drawA4PaletteSourceLine(ctx);
 
     drawCard(ctx, 72, 184, 700, 860, 24);
     ctx.fillStyle = "#111827";
@@ -926,6 +966,7 @@ export function BeadPatternApp() {
       if (!page) continue;
       const { canvas, ctx } = page;
       drawA4Header(ctx, exportTitle, "完整色号图例与用量", `图例 ${pageIndex + 1} / ${totalPages}`, "#1f9a94");
+      drawA4PaletteSourceLine(ctx);
       drawCard(ctx, 72, 196, 1096, 1348, 24);
       ctx.fillStyle = "#111827";
       ctx.font = "800 24px Arial, PingFang SC, sans-serif";
@@ -980,6 +1021,7 @@ export function BeadPatternApp() {
           `网格 ${pageNumber} / ${totalPages}`,
           "#146b70",
         );
+        drawA4PaletteSourceLine(ctx);
 
         const gridCardX = A4_CANVAS.margin;
         const gridCardY = 196;
@@ -1275,6 +1317,10 @@ export function BeadPatternApp() {
             <strong>导入店铺色卡 CSV</strong>
             <small>code,name,hex 或 code,hex</small>
           </label>
+          <div className={isDemoPalette ? "palette-source warning" : "palette-source"}>
+            <strong>{paletteName}</strong>
+            <span>{paletteSourceText}</span>
+          </div>
 
           <div className="palette-grid" aria-label="色号表">
             {palette.map((color) => (
