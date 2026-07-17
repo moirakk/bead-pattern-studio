@@ -44,7 +44,7 @@ type Pattern = {
 
 ## 推荐模块拆分
 
-下一轮应把 `app/BeadPatternApp.tsx` 中的算法和导出逻辑拆出来：
+当前已把颜色、色卡、图纸生成和编辑历史拆到 `lib/pattern`。后续继续把导出、存储和社群模块拆成独立边界：
 
 ```text
 app/
@@ -52,21 +52,25 @@ app/
   globals.css
 
 lib/
-  color/
-    rgb.ts
-    lab.ts
-    distance.ts
   palette/
     parsePalette.ts
     normalizePalette.ts
   pattern/
+    color.ts
+    palette.ts
     buildPattern.ts
     summarizePattern.ts
-    editPattern.ts
+    history.ts
   export/
     exportCsv.ts
     exportPng.ts
     exportPdf.ts
+  projects/
+    projectModel.ts
+    localDrafts.ts
+  community/
+    visibility.ts
+    feedModel.ts
 ```
 
 这样可以让同一套核心逻辑服务：
@@ -110,6 +114,36 @@ lib/
 - 本地草稿：IndexedDB
 - 云端项目：D1/Postgres
 - 图片源文件：R2 或对象存储
+
+### Account 层
+
+负责用户身份和权限：
+
+- Web：邮箱/社交登录
+- 小程序：微信登录
+- 店铺后台：店铺成员与角色
+
+### Community 层
+
+负责公开作品、收藏、评论、标签和主题活动。
+
+### Shop 层
+
+负责店铺色卡、库存、价格、材料包和报价。
+
+## 长期系统形态
+
+```text
+Web / Mini Program / App
+  -> API
+  -> Pattern Core
+  -> Project Service
+  -> Community Service
+  -> Shop Service
+  -> Database + Object Storage
+```
+
+建议先保持单仓库和模块化代码，等功能边界稳定后再拆服务。
 
 ## 后续性能优化
 
