@@ -3,15 +3,22 @@
 import { ChangeEvent, MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   buildPattern,
+  canRedoPattern,
+  canUndoPattern,
   colorDistance,
+  commitPattern,
+  createPatternHistory,
   hexToRgb,
   makeDemoPalette,
   paintPatternCell,
   parsePaletteCsv,
+  redoPattern,
   rgbToLab,
+  resetPatternHistory,
   summarizePattern,
+  undoPattern,
   type BeadColor,
-  type Pattern,
+  type PatternHistory,
   type RGB,
 } from "@/lib/pattern";
 
@@ -136,7 +143,7 @@ export function BeadPatternApp() {
   const [keepRatio, setKeepRatio] = useState(true);
   const [colorLimit, setColorLimit] = useState(18);
   const [crop, setCrop] = useState<Crop>({ x: 0, y: 0, width: 100, height: 100 });
-  const [pattern, setPattern] = useState<Pattern | null>(null);
+  const [patternHistory, setPatternHistory] = useState<PatternHistory>(() => createPatternHistory(null));
   const [selectedCode, setSelectedCode] = useState("A01");
   const [activeCell, setActiveCell] = useState<number | null>(null);
   const [status, setStatus] = useState("上传图片后会自动生成图纸。");
@@ -148,8 +155,11 @@ export function BeadPatternApp() {
     () => palette.find((color) => color.code === selectedCode) ?? palette[0],
     [palette, selectedCode],
   );
+  const pattern = patternHistory.present;
   const stats = useMemo(() => summarizePattern(pattern, palette), [pattern, palette]);
   const totalBeans = pattern ? pattern.width * pattern.height : gridWidth * gridHeight;
+  const canUndo = canUndoPattern(patternHistory);
+  const canRedo = canRedoPattern(patternHistory);
 
   useEffect(() => {
     if (!sourceImage) return;
@@ -181,7 +191,9 @@ export function BeadPatternApp() {
           b: Math.round(data[index + 2] * alpha + 251 * (1 - alpha)),
         });
       }
-      setPattern(buildPattern(pixels, gridWidth, gridHeight, palette, colorLimit));
+      const nextPattern = buildPattern(pixels, gridWidth, gridHeight, palette, colorLimit);
+      setPatternHistory((current) => resetPatternHistory(current, nextPattern));
+      setActiveCell(null);
       setStatus(`已生成 ${gridWidth} x ${gridHeight}，共 ${gridWidth * gridHeight} 颗豆。`);
     }, 120);
     return () => window.clearTimeout(timer);
@@ -309,8 +321,23 @@ export function BeadPatternApp() {
 
   function paintCell(index: number) {
     if (!pattern || !selectedColor) return;
-    setPattern(paintPatternCell(pattern, index, selectedColor));
+    setPatternHistory((current) => {
+      if (!current.present || current.present.cells[index]?.code === selectedColor.code) return current;
+      return commitPattern(current, paintPatternCell(current.present, index, selectedColor));
+    });
     setActiveCell(index);
+  }
+
+  function undoEdit() {
+    if (!canUndo) return;
+    setPatternHistory((current) => undoPattern(current));
+    setActiveCell(null);
+  }
+
+  function redoEdit() {
+    if (!canRedo) return;
+    setPatternHistory((current) => redoPattern(current));
+    setActiveCell(null);
   }
 
   function handlePatternClick(event: MouseEvent<HTMLCanvasElement>) {
@@ -562,6 +589,14 @@ export function BeadPatternApp() {
             <div>
               <strong>手工替换单格</strong>
               <span>选择色号后点击任意格子即可替换。</span>
+            </div>
+            <div className="history-actions">
+              <button type="button" onClick={undoEdit} disabled={!canUndo} title="撤销上一次改单格">
+                撤销
+              </button>
+              <button type="button" onClick={redoEdit} disabled={!canRedo} title="重做上一次改单格">
+                重做
+              </button>
             </div>
             <select value={selectedCode} onChange={(event) => setSelectedCode(event.target.value)}>
               {palette.map((color) => (

@@ -2,15 +2,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildPattern,
+  canRedoPattern,
+  canUndoPattern,
   colorDistance,
+  commitPattern,
   createBeadColor,
+  createPatternHistory,
   hexToRgb,
   nearestColor,
   paintPatternCell,
   parsePaletteCsv,
+  redoPattern,
   rgbToHex,
   rgbToLab,
+  resetPatternHistory,
   summarizePattern,
+  undoPattern,
 } from "../lib/pattern";
 import type { RGB } from "../lib/pattern";
 
@@ -71,6 +78,39 @@ test("summarizes and edits pattern cells", () => {
   const edited = paintPatternCell(pattern, 0, blue);
   assert.equal(edited.cells[0].code, "BL");
   assert.equal(pattern.cells[0].code, "W");
+});
+
+test("tracks pattern undo and redo history", () => {
+  const pattern = buildPattern(
+    [
+      { r: 255, g: 255, b: 255 },
+      { r: 0, g: 0, b: 0 },
+    ],
+    2,
+    1,
+    palette,
+    4,
+  );
+  const edited = paintPatternCell(pattern, 0, blue);
+  let history = createPatternHistory(pattern, 5);
+
+  history = commitPattern(history, edited);
+  assert.equal(canUndoPattern(history), true);
+  assert.equal(canRedoPattern(history), false);
+  assert.equal(history.present?.cells[0].code, "BL");
+
+  history = undoPattern(history);
+  assert.equal(history.present?.cells[0].code, "W");
+  assert.equal(canUndoPattern(history), false);
+  assert.equal(canRedoPattern(history), true);
+
+  history = redoPattern(history);
+  assert.equal(history.present?.cells[0].code, "BL");
+
+  history = resetPatternHistory(history, pattern);
+  assert.equal(history.present?.cells[0].code, "W");
+  assert.equal(canUndoPattern(history), false);
+  assert.equal(canRedoPattern(history), false);
 });
 
 test("parses store palette CSV formats", () => {

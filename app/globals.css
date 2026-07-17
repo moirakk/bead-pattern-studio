@@ -385,7 +385,7 @@ input[type="range"] {
 
 .paint-bar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 300px) 44px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(180px, 300px) 44px;
   gap: 12px;
   align-items: center;
   margin-top: 14px;
@@ -404,6 +404,26 @@ input[type="range"] {
   margin-top: 3px;
   color: var(--muted);
   font-size: 13px;
+}
+
+.history-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.history-actions button {
+  min-width: 56px;
+  min-height: 40px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-weight: 800;
+}
+
+.history-actions button:not(:disabled):hover {
+  border-color: var(--coral);
+  box-shadow: 0 0 0 2px rgba(255, 107, 74, 0.14);
 }
 
 .swatch-large {
