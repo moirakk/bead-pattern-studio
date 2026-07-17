@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, MouseEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { makePdfFromJpegPages } from "@/lib/export/pdf";
 import {
   buildPattern,
@@ -12,6 +12,7 @@ import {
   hexToRgb,
   makeDemoPalette,
   paintPatternCell,
+  paintPatternArea,
   parsePaletteCsv,
   redoPattern,
   rgbToLab,
@@ -29,6 +30,15 @@ type Crop = {
   y: number;
   width: number;
   height: number;
+};
+
+type EditMode = "paint" | "select";
+
+type SelectionDraft = {
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
 };
 
 const TECH_CARDS = [
@@ -83,6 +93,9 @@ export function BeadPatternApp() {
   const [patternHistory, setPatternHistory] = useState<PatternHistory>(() => createPatternHistory(null));
   const [selectedCode, setSelectedCode] = useState("A01");
   const [activeCell, setActiveCell] = useState<number | null>(null);
+  const [editMode, setEditMode] = useState<EditMode>("paint");
+  const [selection, setSelection] = useState<SelectionDraft | null>(null);
+  const [isSelecting, setIsSelecting] = useState(false);
   const [status, setStatus] = useState("上传图片后会自动生成图纸。");
   const sourcePreviewRef = useRef<HTMLCanvasElement | null>(null);
   const workCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -97,6 +110,15 @@ export function BeadPatternApp() {
   const totalBeans = pattern ? pattern.width * pattern.height : gridWidth * gridHeight;
   const canUndo = canUndoPattern(patternHistory);
   const canRedo = canRedoPattern(patternHistory);
+  const selectedArea = useMemo(() => {
+    if (!selection) return null;
+    const x = Math.min(selection.startX, selection.endX);
+    const y = Math.min(selection.startY, selection.endY);
+    const endX = Math.max(selection.startX, selection.endX);
+    const endY = Math.max(selection.startY, selection.endY);
+    return { x, y, width: endX - x + 1, height: endY - y + 1 };
+  }, [selection]);
+  const selectedAreaCount = selectedArea ? selectedArea.width * selectedArea.height : 0;
 
   useEffect(() => {
     if (!sourceImage) return;
@@ -131,6 +153,8 @@ export function BeadPatternApp() {
       const nextPattern = buildPattern(pixels, gridWidth, gridHeight, palette, colorLimit, { ditherMode });
       setPatternHistory((current) => resetPatternHistory(current, nextPattern));
       setActiveCell(null);
+      setSelection(null);
+      setIsSelecting(false);
       const ditherLabel = ditherMode === "none" ? "未使用抖动" : `已使用${ditherMode === "soft" ? "柔和" : "强化"}抖动`;
       setStatus(`已生成 ${gridWidth} x ${gridHeight}，共 ${gridWidth * gridHeight} 颗豆，${ditherLabel}。`);
     }, 120);
@@ -201,7 +225,19 @@ export function BeadPatternApp() {
       ctx.lineWidth = Math.max(2, cellSize / 5);
       ctx.strokeRect(x * cellSize + 1, y * cellSize + 1, cellSize - 2, cellSize - 2);
     }
-  }, [pattern, activeCell]);
+    if (selectedArea) {
+      ctx.fillStyle = "rgba(255, 107, 74, 0.16)";
+      ctx.fillRect(selectedArea.x * cellSize, selectedArea.y * cellSize, selectedArea.width * cellSize, selectedArea.height * cellSize);
+      ctx.strokeStyle = "#ff6b4a";
+      ctx.lineWidth = Math.max(2, cellSize / 5);
+      ctx.strokeRect(
+        selectedArea.x * cellSize + 1,
+        selectedArea.y * cellSize + 1,
+        selectedArea.width * cellSize - 2,
+        selectedArea.height * cellSize - 2,
+      );
+    }
+  }, [pattern, activeCell, selectedArea]);
 
   function handleImageUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -264,6 +300,17 @@ export function BeadPatternApp() {
       return commitPattern(current, paintPatternCell(current.present, index, selectedColor));
     });
     setActiveCell(index);
+    setSelection(null);
+  }
+
+  function fillSelection() {
+    if (!selectedArea || !selectedColor) return;
+    setPatternHistory((current) => {
+      if (!current.present) return current;
+      const nextPattern = paintPatternArea(current.present, selectedArea, selectedColor);
+      return nextPattern === current.present ? current : commitPattern(current, nextPattern);
+    });
+    setStatus(`已将选区 ${selectedArea.width} x ${selectedArea.height} 替换为 ${selectedColor.code}。`);
   }
 
   function undoEdit() {
@@ -278,14 +325,45 @@ export function BeadPatternApp() {
     setActiveCell(null);
   }
 
-  function handlePatternClick(event: MouseEvent<HTMLCanvasElement>) {
+  function getCanvasCell(event: PointerEvent<HTMLCanvasElement>) {
     if (!pattern) return;
     const canvas = event.currentTarget;
     const rect = canvas.getBoundingClientRect();
     const x = Math.floor(((event.clientX - rect.left) / rect.width) * pattern.width);
     const y = Math.floor(((event.clientY - rect.top) / rect.height) * pattern.height);
-    if (x < 0 || x >= pattern.width || y < 0 || y >= pattern.height) return;
-    paintCell(y * pattern.width + x);
+    if (x < 0 || x >= pattern.width || y < 0 || y >= pattern.height) return null;
+    return { x, y };
+  }
+
+  function handlePatternPointerDown(event: PointerEvent<HTMLCanvasElement>) {
+    if (!pattern) return;
+    const cell = getCanvasCell(event);
+    if (!cell) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    if (editMode === "paint") {
+      paintCell(cell.y * pattern.width + cell.x);
+      return;
+    }
+    setActiveCell(null);
+    setSelection({ startX: cell.x, startY: cell.y, endX: cell.x, endY: cell.y });
+    setIsSelecting(true);
+  }
+
+  function handlePatternPointerMove(event: PointerEvent<HTMLCanvasElement>) {
+    if (editMode !== "select" || !isSelecting) return;
+    const cell = getCanvasCell(event);
+    if (!cell) return;
+    setSelection((current) => (current ? { ...current, endX: cell.x, endY: cell.y } : current));
+  }
+
+  function handlePatternPointerUp(event: PointerEvent<HTMLCanvasElement>) {
+    if (editMode !== "select" || !isSelecting) return;
+    const cell = getCanvasCell(event);
+    if (cell) {
+      setSelection((current) => (current ? { ...current, endX: cell.x, endY: cell.y } : current));
+    }
+    setIsSelecting(false);
+    event.currentTarget.releasePointerCapture(event.pointerId);
   }
 
   function makeExportCanvas() {
@@ -723,7 +801,14 @@ export function BeadPatternApp() {
 
           <div className="canvas-wrap">
             {pattern ? (
-              <canvas ref={patternCanvasRef} onClick={handlePatternClick} className="pattern-canvas" aria-label="拼豆图纸，可点击单格替换颜色" />
+              <canvas
+                ref={patternCanvasRef}
+                onPointerDown={handlePatternPointerDown}
+                onPointerMove={handlePatternPointerMove}
+                onPointerUp={handlePatternPointerUp}
+                className={editMode === "select" ? "pattern-canvas selecting" : "pattern-canvas"}
+                aria-label="拼豆图纸，可点击单格或拖拽框选区域"
+              />
             ) : (
               <div className="pattern-empty">
                 <strong>上传图片开始生成</strong>
@@ -734,8 +819,16 @@ export function BeadPatternApp() {
 
           <div className="paint-bar">
             <div>
-              <strong>手工替换单格</strong>
-              <span>选择色号后点击任意格子即可替换。</span>
+              <strong>{editMode === "paint" ? "手工替换单格" : "区域批量换色"}</strong>
+              <span>{editMode === "paint" ? "选择色号后点击任意格子即可替换。" : selectedArea ? `已选 ${selectedArea.width} x ${selectedArea.height}，共 ${selectedAreaCount} 格。` : "拖拽图纸框选要替换的区域。"}</span>
+            </div>
+            <div className="edit-mode-toggle" role="group" aria-label="编辑模式">
+              <button type="button" className={editMode === "paint" ? "active" : ""} aria-pressed={editMode === "paint"} onClick={() => setEditMode("paint")}>
+                单格
+              </button>
+              <button type="button" className={editMode === "select" ? "active" : ""} aria-pressed={editMode === "select"} onClick={() => setEditMode("select")}>
+                选区
+              </button>
             </div>
             <div className="history-actions">
               <button type="button" onClick={undoEdit} disabled={!canUndo} title="撤销上一次改单格">
@@ -751,6 +844,14 @@ export function BeadPatternApp() {
               ))}
             </select>
             <span className="swatch-large" style={{ background: selectedColor?.hex }} />
+            <div className="selection-actions">
+              <button type="button" onClick={fillSelection} disabled={!selectedArea || !pattern}>
+                填充选区
+              </button>
+              <button type="button" onClick={() => setSelection(null)} disabled={!selectedArea}>
+                清除
+              </button>
+            </div>
           </div>
         </section>
 

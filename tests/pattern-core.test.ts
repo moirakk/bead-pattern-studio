@@ -11,6 +11,7 @@ import {
   createPatternHistory,
   hexToRgb,
   nearestColor,
+  paintPatternArea,
   paintPatternCell,
   parsePaletteCsv,
   redoPattern,
@@ -89,6 +90,10 @@ test("summarizes and edits pattern cells", () => {
 
   const edited = paintPatternCell(pattern, 0, blue);
   assert.equal(edited.cells[0].code, "BL");
+  assert.equal(pattern.cells[0].code, "W");
+
+  const areaEdited = paintPatternArea(pattern, { x: 0, y: 0, width: 2, height: 1 }, red);
+  assert.deepEqual(areaEdited.cells.map((cell) => cell.code), ["R", "R", "B", "R"]);
   assert.equal(pattern.cells[0].code, "W");
 });
 

@@ -22,6 +22,13 @@ export type Pattern = {
   cells: PatternCell[];
 };
 
+export type PatternRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
 export type DitherMode = "none" | "soft" | "strong";
 
 export type BuildPatternOptions = {

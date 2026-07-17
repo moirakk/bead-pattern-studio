@@ -403,6 +403,12 @@ input[type="range"] {
   border: 1px solid rgba(17, 24, 39, 0.32);
   box-shadow: 0 18px 45px rgba(17, 24, 39, 0.12);
   cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+}
+
+.pattern-canvas.selecting {
+  cursor: cell;
 }
 
 .pattern-empty {
@@ -420,7 +426,7 @@ input[type="range"] {
 
 .paint-bar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(180px, 300px) 44px;
+  grid-template-columns: minmax(0, 1fr) auto auto minmax(180px, 300px) 44px;
   gap: 12px;
   align-items: center;
   margin-top: 14px;
@@ -446,7 +452,9 @@ input[type="range"] {
   gap: 8px;
 }
 
-.history-actions button {
+.history-actions button,
+.selection-actions button,
+.edit-mode-toggle button {
   min-width: 56px;
   min-height: 40px;
   color: var(--ink);
@@ -456,7 +464,33 @@ input[type="range"] {
   font-weight: 800;
 }
 
-.history-actions button:not(:disabled):hover {
+.edit-mode-toggle {
+  display: flex;
+  gap: 6px;
+}
+
+.edit-mode-toggle button.active {
+  color: #fff;
+  background: var(--teal-dark);
+  border-color: var(--teal-dark);
+}
+
+.selection-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.selection-actions button:first-child {
+  color: #fff;
+  background: var(--coral);
+  border-color: var(--coral);
+}
+
+.history-actions button:not(:disabled):hover,
+.selection-actions button:not(:disabled):hover,
+.edit-mode-toggle button:not(:disabled):hover {
   border-color: var(--coral);
   box-shadow: 0 0 0 2px rgba(255, 107, 74, 0.14);
 }
@@ -586,6 +620,15 @@ input[type="range"] {
   .paint-bar {
     grid-template-columns: 1fr;
     align-items: stretch;
+  }
+
+  .selection-actions {
+    justify-content: stretch;
+  }
+
+  .selection-actions button,
+  .edit-mode-toggle button {
+    flex: 1;
   }
 
   .stage-toolbar {

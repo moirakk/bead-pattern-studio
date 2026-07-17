@@ -1,5 +1,5 @@
 import { colorDistance, rgbToLab } from "./color";
-import type { BeadColor, BuildPatternOptions, DitherMode, Pattern, PatternSummaryItem, RGB } from "./types";
+import type { BeadColor, BuildPatternOptions, DitherMode, Pattern, PatternRect, PatternSummaryItem, RGB } from "./types";
 
 const DITHER_STRENGTH: Record<DitherMode, number> = {
   none: 0,
@@ -143,6 +143,26 @@ export function paintPatternCell(pattern: Pattern, index: number, color: BeadCol
       cellIndex === index ? { ...cell, code: color.code, hex: color.hex } : cell,
     ),
   };
+}
+
+export function paintPatternArea(pattern: Pattern, rect: PatternRect, color: BeadColor): Pattern {
+  const startX = Math.max(0, Math.min(pattern.width - 1, Math.floor(rect.x)));
+  const startY = Math.max(0, Math.min(pattern.height - 1, Math.floor(rect.y)));
+  const endX = Math.max(startX, Math.min(pattern.width - 1, Math.floor(rect.x + rect.width - 1)));
+  const endY = Math.max(startY, Math.min(pattern.height - 1, Math.floor(rect.y + rect.height - 1)));
+  let changed = false;
+
+  const cells = pattern.cells.map((cell, index) => {
+    const x = index % pattern.width;
+    const y = Math.floor(index / pattern.width);
+    if (x < startX || x > endX || y < startY || y > endY || cell.code === color.code) {
+      return cell;
+    }
+    changed = true;
+    return { ...cell, code: color.code, hex: color.hex };
+  });
+
+  return changed ? { ...pattern, cells } : pattern;
 }
 
 export function summarizePattern(pattern: Pattern | null, palette: BeadColor[]): PatternSummaryItem[] {
