@@ -2,6 +2,8 @@
 
 import { ChangeEvent, FormEvent, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { CommunityDiscover } from "@/app/CommunityDiscover";
+import type { CommunityPost } from "@/lib/community/feed";
+import { createRemixedProject } from "@/lib/community/remix";
 import { makePdfFromJpegPages } from "@/lib/export/pdf";
 import { createProjectPosterBlob } from "@/lib/export/project-poster";
 import { deliverExportFile, selectionHaptic } from "@/lib/native/share";
@@ -686,6 +688,17 @@ export function BeadPatternApp() {
     setCommunityPreviewProjectId(project.id);
     setActiveMobilePanel("discover");
     setPendingDeleteProjectId(null);
+  }
+
+  async function remixCommunityPost(post: CommunityPost) {
+    const remixed = createRemixedProject(post);
+    remixed.thumbnail = makeSavedProjectThumbnail(remixed.pattern);
+    const nextProjects = [remixed, ...savedProjects].slice(0, MAX_SAVED_PROJECTS);
+    await saveSavedProjects(nextProjects);
+    setSavedProjects(nextProjects);
+    setPortfolioNotice(`已将「${post.title}」复刻到我的作品。`);
+    setStatus(`已创建「${remixed.title}」，可在作品页继续编辑。`);
+    void selectionHaptic();
   }
 
   function exportProjectsBackup() {
@@ -1617,7 +1630,11 @@ export function BeadPatternApp() {
         </aside>
 
         <section className={`panel discover-panel mobile-panel ${activeMobilePanel === "discover" ? "mobile-panel-active" : ""}`}>
-          <CommunityDiscover previewProject={communityPreviewProject} onClearPreview={() => setCommunityPreviewProjectId(null)} />
+          <CommunityDiscover
+            previewProject={communityPreviewProject}
+            onClearPreview={() => setCommunityPreviewProjectId(null)}
+            onRemix={remixCommunityPost}
+          />
         </section>
 
         <section className={`panel projects-panel mobile-panel ${activeMobilePanel === "works" ? "mobile-panel-active" : ""}`}>
@@ -1716,6 +1733,7 @@ export function BeadPatternApp() {
                       {project.pattern.width} x {project.pattern.height} · {formatCount(project.pattern.cells.length)} 颗
                     </small>
                     <small>{project.palette.length} 个可用色号 · 使用 {summarizePattern(project.pattern, project.palette).length} 色</small>
+                    {project.remixSource ? <small className="saved-project-origin">复刻自 {project.remixSource.author} · {project.remixSource.title}</small> : null}
                     <small>{new Date(project.savedAt).toLocaleString("zh-CN", { dateStyle: "short", timeStyle: "short" })}</small>
                     <select
                       className="saved-project-category"

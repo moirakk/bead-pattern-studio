@@ -1,6 +1,6 @@
 # Bead Pattern Studio / 拼豆图纸转换器
 
-拼豆创作平台原型：从“任意图片转拼豆图纸”开始，逐步扩展到图纸识别、个人作品集、社群分享、店铺色卡和材料包。当前版本是网页 MVP，已验证核心流程：上传图片、裁剪、像素化、限制成品尺寸/豆数、默认按 MARD 221 标准色卡匹配、可导入店铺色卡 CSV、手工改单格、撤销/重做、统计用量，并导出带网格、坐标、色号和图例的 PNG/PDF 图纸。
+拼豆创作平台原型：从“任意图片转拼豆图纸”开始，逐步扩展到图纸识别、个人作品集、社群分享、店铺色卡和材料包。当前版本是网页 MVP，已验证核心流程：上传图片、裁剪、像素化、限制成品尺寸/豆数、默认按 MARD 221 标准色卡匹配、可导入店铺色卡 CSV、手工改单格、撤销/重做、统计用量，并导出带网格、坐标、色号和图例的 PNG/PDF 图纸。手机端还包含社区发现原型，可查看作品详情、收藏并复刻为保留原作来源的本地可编辑图纸。
 
 线上原型：
 https://bead-pattern-studio.moirahou1.chatgpt.site
@@ -34,6 +34,7 @@ https://bead-pattern-studio.moirahou1.chatgpt.site
 - [色卡数据规范](docs/palette-format.md)
 - [色号来源交叉验证](docs/color-source-audit.md)
 - [算法路线图](docs/algorithm-roadmap.md)
+- [社区产品设计](docs/community-product.md)
 
 ## 本地开发
 

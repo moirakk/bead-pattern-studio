@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { COMMUNITY_SAMPLE_POSTS, createPreviewPattern, selectCommunityPosts } from "../lib/community/feed";
+import { createRemixedProject } from "../lib/community/remix";
 import { makePdfFromJpegPages } from "../lib/export/pdf";
 import { calculatePosterPatternRect } from "../lib/export/project-poster";
 import { createProjectBackup, mergeSavedProjects, parseProjectBackup, type SavedProject } from "../lib/projects/backup";
@@ -326,4 +327,23 @@ test("builds and filters the community preview feed", () => {
   assert.equal(latest[0].id, "sample-mountain");
   assert.ok(flowers.every((post) => post.category === "花卉"));
   assert.deepEqual(saved.map((post) => post.id), ["sample-duck"]);
+  assert.ok(COMMUNITY_SAMPLE_POSTS.every((post) => post.paletteName === "MARD 221 标准色卡"));
+  assert.ok(COMMUNITY_SAMPLE_POSTS.every((post) => post.updates.length >= 2));
+});
+
+test("remixes a community pattern into an editable MARD 221 project with attribution", () => {
+  const post = COMMUNITY_SAMPLE_POSTS[0];
+  const project = createRemixedProject(post, "remix-test", "2026-07-17T12:00:00.000Z");
+  const mardCodes = new Set(makeMard221Palette().map((color) => color.code));
+
+  assert.equal(project.id, "remix-test");
+  assert.equal(project.title, `${post.title} 复刻`);
+  assert.equal(project.remixSource?.communityPostId, post.id);
+  assert.equal(project.remixSource?.author, post.author);
+  assert.equal(project.settings.paletteSourceKind, "builtin");
+  assert.equal(project.pattern.cells.length, post.pattern.cells.length);
+  assert.ok(project.pattern.cells.every((cell) => mardCodes.has(cell.code)));
+
+  const restored = parseProjectBackup(createProjectBackup([project]));
+  assert.deepEqual(restored[0].remixSource, project.remixSource);
 });
