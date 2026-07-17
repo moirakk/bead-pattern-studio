@@ -1,5 +1,11 @@
 import { colorDistance, rgbToLab } from "./color";
-import type { BeadColor, Pattern, PatternSummaryItem, RGB } from "./types";
+import type { BeadColor, BuildPatternOptions, DitherMode, Pattern, PatternSummaryItem, RGB } from "./types";
+
+const DITHER_STRENGTH: Record<DitherMode, number> = {
+  none: 0,
+  soft: 0.55,
+  strong: 1,
+};
 
 export function nearestColor(rgb: RGB, palette: BeadColor[]) {
   if (!palette.length) {
@@ -19,7 +25,89 @@ export function nearestColor(rgb: RGB, palette: BeadColor[]) {
   return winner;
 }
 
-export function buildPattern(sourcePixels: RGB[], width: number, height: number, palette: BeadColor[], colorLimit: number): Pattern {
+function selectAllowedPalette(sourcePixels: RGB[], palette: BeadColor[], colorLimit: number) {
+  const initialCodes = sourcePixels.map((pixel) => nearestColor(pixel, palette).code);
+  const counts = new Map<string, number>();
+  const limit = Math.max(1, Math.min(colorLimit, palette.length));
+  for (const code of initialCodes) {
+    counts.set(code, (counts.get(code) ?? 0) + 1);
+  }
+
+  const allowedCodes = new Set(
+    [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([code]) => code),
+  );
+
+  if (allowedCodes.size < limit) {
+    const sourceLabs = sourcePixels.map(rgbToLab);
+    const fillColors = palette
+      .filter((color) => !allowedCodes.has(color.code))
+      .map((color) => ({
+        code: color.code,
+        score: sourceLabs.reduce(
+          (best, lab) => Math.min(best, colorDistance(lab, color.lab)),
+          Number.POSITIVE_INFINITY,
+        ),
+      }))
+      .sort((a, b) => a.score - b.score)
+      .slice(0, limit - allowedCodes.size);
+
+    for (const color of fillColors) {
+      allowedCodes.add(color.code);
+    }
+  }
+
+  const allowedPalette = palette.filter((color) => allowedCodes.has(color.code));
+  return allowedPalette.length ? allowedPalette : palette;
+}
+
+function clampChannel(value: number) {
+  return Math.max(0, Math.min(255, value));
+}
+
+function quantizeWithDither(sourcePixels: RGB[], width: number, allowedPalette: BeadColor[], strength: number) {
+  const workPixels = sourcePixels.map((pixel) => ({ ...pixel }));
+  const cells = new Array<{ code: string; hex: string; source: RGB }>(sourcePixels.length);
+
+  function addError(index: number, error: RGB, weight: number) {
+    const pixel = workPixels[index];
+    if (!pixel) return;
+    pixel.r = clampChannel(pixel.r + error.r * weight * strength);
+    pixel.g = clampChannel(pixel.g + error.g * weight * strength);
+    pixel.b = clampChannel(pixel.b + error.b * weight * strength);
+  }
+
+  for (let index = 0; index < workPixels.length; index += 1) {
+    const x = index % width;
+    const pixel = workPixels[index];
+    const color = nearestColor(pixel, allowedPalette);
+    cells[index] = { code: color.code, hex: color.hex, source: sourcePixels[index] };
+
+    const error = {
+      r: pixel.r - color.rgb.r,
+      g: pixel.g - color.rgb.g,
+      b: pixel.b - color.rgb.b,
+    };
+
+    if (x + 1 < width) addError(index + 1, error, 7 / 16);
+    if (index + width < workPixels.length) addError(index + width, error, 5 / 16);
+    if (x > 0 && index + width - 1 < workPixels.length) addError(index + width - 1, error, 3 / 16);
+    if (x + 1 < width && index + width + 1 < workPixels.length) addError(index + width + 1, error, 1 / 16);
+  }
+
+  return cells;
+}
+
+export function buildPattern(
+  sourcePixels: RGB[],
+  width: number,
+  height: number,
+  palette: BeadColor[],
+  colorLimit: number,
+  options: BuildPatternOptions = {},
+): Pattern {
   if (sourcePixels.length !== width * height) {
     throw new Error(`Expected ${width * height} source pixels, received ${sourcePixels.length}.`);
   }
@@ -27,25 +115,20 @@ export function buildPattern(sourcePixels: RGB[], width: number, height: number,
     throw new Error("buildPattern requires at least one palette color.");
   }
 
-  const initialCodes = sourcePixels.map((pixel) => nearestColor(pixel, palette).code);
-  const counts = new Map<string, number>();
-  for (const code of initialCodes) {
-    counts.set(code, (counts.get(code) ?? 0) + 1);
-  }
-
-  const allowedCodes = [...counts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, Math.max(1, Math.min(colorLimit, palette.length)))
-    .map(([code]) => code);
-  const allowedPalette = palette.filter((color) => allowedCodes.includes(color.code));
+  const allowedPalette = selectAllowedPalette(sourcePixels, palette, colorLimit);
+  const ditherMode = options.ditherMode ?? "none";
+  const strength = DITHER_STRENGTH[ditherMode] ?? 0;
 
   return {
     width,
     height,
-    cells: sourcePixels.map((pixel) => {
-      const color = nearestColor(pixel, allowedPalette.length ? allowedPalette : palette);
-      return { code: color.code, hex: color.hex, source: pixel };
-    }),
+    cells:
+      strength > 0
+        ? quantizeWithDither(sourcePixels, width, allowedPalette, strength)
+        : sourcePixels.map((pixel) => {
+            const color = nearestColor(pixel, allowedPalette);
+            return { code: color.code, hex: color.hex, source: pixel };
+          }),
   };
 }
 

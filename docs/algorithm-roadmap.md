@@ -11,7 +11,8 @@
 7. 先做一次全色卡匹配并统计色号。
 8. 取 Top N 色号作为色数上限。
 9. 再把所有格子重映射到 Top N 色号。
-10. 输出 `Pattern` 和用量表。
+10. 如用户开启抖动，使用 Floyd-Steinberg 误差扩散在限定色号内保留渐变。
+11. 输出 `Pattern` 和用量表。
 
 ## 近期改进
 
@@ -28,17 +29,16 @@
 
 用于在色数少时保留渐变和阴影。
 
-可选算法：
-
-- Floyd-Steinberg
-- Atkinson
-- Bayer ordered dithering
-
-界面上建议做成三档：
+当前已实现：
 
 - 关闭
-- 柔和
-- 强化
+- 柔和 Floyd-Steinberg
+- 强化 Floyd-Steinberg
+
+后续可选算法：
+
+- Atkinson
+- Bayer ordered dithering
 
 ### 3. 边缘保护
 
@@ -110,11 +110,11 @@
 - 为 RGB/Lab/nearestColor/buildPattern 写单元测试。
 - 加入 `PatternEditHistory`，支持撤销/重做。
 - 增加 A4 分页 PDF 导出。
+- 增加抖动开关。
 
 下一步：
 
-1. 增加抖动开关。
-2. 增加区域选择和批量换色。
-3. 增加透明背景处理策略。
-4. 增加项目保存与恢复。
-5. 增加公开作品页原型。
+1. 增加区域选择和批量换色。
+2. 增加透明背景处理策略。
+3. 增加项目保存与恢复。
+4. 增加公开作品页原型。

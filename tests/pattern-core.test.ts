@@ -58,6 +58,17 @@ test("builds a pattern and enforces color limit by usage", () => {
   assert.deepEqual([...new Set(pattern.cells.map((cell) => cell.code))].sort(), ["R", "W"]);
 });
 
+test("applies optional dithering within the selected color limit", () => {
+  const pixels: RGB[] = Array.from({ length: 16 }, () => ({ r: 128, g: 128, b: 128 }));
+  const plain = buildPattern(pixels, 4, 4, [black, white], 2);
+  const dithered = buildPattern(pixels, 4, 4, [black, white], 2, { ditherMode: "strong" });
+  const codes = new Set(dithered.cells.map((cell) => cell.code));
+
+  assert.equal(new Set(plain.cells.map((cell) => cell.code)).size, 1);
+  assert.equal(codes.size, 2);
+  assert.deepEqual([...codes].sort(), ["B", "W"]);
+});
+
 test("summarizes and edits pattern cells", () => {
   const pattern = buildPattern(
     [

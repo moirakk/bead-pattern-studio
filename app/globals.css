@@ -304,6 +304,41 @@ input[type="range"] {
   accent-color: var(--teal);
 }
 
+.mode-field {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.mode-toggle {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  background: #eef2f6;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.mode-toggle button {
+  min-height: 34px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.mode-toggle button.active {
+  color: #fff;
+  background: var(--teal-dark);
+  box-shadow: 0 6px 16px rgba(20, 107, 112, 0.18);
+}
+
 .pattern-stage {
   min-width: 0;
 }

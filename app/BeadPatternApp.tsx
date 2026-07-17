@@ -19,6 +19,7 @@ import {
   summarizePattern,
   undoPattern,
   type BeadColor,
+  type DitherMode,
   type PatternHistory,
   type RGB,
 } from "@/lib/pattern";
@@ -41,7 +42,7 @@ const TECH_CARDS = [
   },
   {
     title: "算法设计",
-    body: "裁剪后缩放到豆阵尺寸，读取每格平均 RGB，转 Lab 空间计算色差；先全色卡匹配统计，再保留 Top N 色号重映射。",
+    body: "裁剪后缩放到豆阵尺寸，读取每格平均 RGB，转 Lab 空间计算色差；支持 Top N 色号限制和柔和/强化抖动。",
   },
   {
     title: "可扩展架构",
@@ -77,6 +78,7 @@ export function BeadPatternApp() {
   const [gridHeight, setGridHeight] = useState(48);
   const [keepRatio, setKeepRatio] = useState(true);
   const [colorLimit, setColorLimit] = useState(18);
+  const [ditherMode, setDitherMode] = useState<DitherMode>("none");
   const [crop, setCrop] = useState<Crop>({ x: 0, y: 0, width: 100, height: 100 });
   const [patternHistory, setPatternHistory] = useState<PatternHistory>(() => createPatternHistory(null));
   const [selectedCode, setSelectedCode] = useState("A01");
@@ -126,13 +128,14 @@ export function BeadPatternApp() {
           b: Math.round(data[index + 2] * alpha + 251 * (1 - alpha)),
         });
       }
-      const nextPattern = buildPattern(pixels, gridWidth, gridHeight, palette, colorLimit);
+      const nextPattern = buildPattern(pixels, gridWidth, gridHeight, palette, colorLimit, { ditherMode });
       setPatternHistory((current) => resetPatternHistory(current, nextPattern));
       setActiveCell(null);
-      setStatus(`已生成 ${gridWidth} x ${gridHeight}，共 ${gridWidth * gridHeight} 颗豆。`);
+      const ditherLabel = ditherMode === "none" ? "未使用抖动" : `已使用${ditherMode === "soft" ? "柔和" : "强化"}抖动`;
+      setStatus(`已生成 ${gridWidth} x ${gridHeight}，共 ${gridWidth * gridHeight} 颗豆，${ditherLabel}。`);
     }, 120);
     return () => window.clearTimeout(timer);
-  }, [sourceImage, gridWidth, gridHeight, palette, colorLimit, crop]);
+  }, [sourceImage, gridWidth, gridHeight, palette, colorLimit, ditherMode, crop]);
 
   useEffect(() => {
     const canvas = sourcePreviewRef.current;
@@ -683,6 +686,26 @@ export function BeadPatternApp() {
             色数上限：{colorLimit}
             <input type="range" min="2" max={Math.max(2, palette.length)} value={colorLimit} onChange={(event) => setColorLimit(Number(event.target.value))} />
           </label>
+          <div className="mode-field">
+            <span>抖动</span>
+            <div className="mode-toggle" role="group" aria-label="抖动模式">
+              {[
+                ["none", "关闭"],
+                ["soft", "柔和"],
+                ["strong", "强化"],
+              ].map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={ditherMode === mode ? "active" : ""}
+                  aria-pressed={ditherMode === mode}
+                  onClick={() => setDitherMode(mode as DitherMode)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
         </aside>
 
         <section className="pattern-stage">
