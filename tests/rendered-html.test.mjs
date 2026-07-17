@@ -36,5 +36,7 @@ test("server-renders the bead pattern studio shell", async () => {
   assert.match(html, /导入店铺色卡 CSV/);
   assert.match(html, /我的拼豆作品/);
   assert.match(html, /上传第一张图片/);
+  assert.match(html, /导入备份/);
+  assert.match(html, /备份作品/);
   assert.doesNotMatch(html, /Your site is taking shape|react-loading-skeleton|codex-preview/i);
 });

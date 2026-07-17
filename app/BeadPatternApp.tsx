@@ -4,6 +4,14 @@ import { ChangeEvent, PointerEvent, useEffect, useMemo, useRef, useState } from 
 import { makePdfFromJpegPages } from "@/lib/export/pdf";
 import { deliverExportFile, selectionHaptic } from "@/lib/native/share";
 import {
+  createProjectBackup,
+  mergeSavedProjects,
+  parseProjectBackup,
+  type Crop,
+  type PaletteSourceKind,
+  type SavedProject,
+} from "@/lib/projects/backup";
+import {
   buildPattern,
   canRedoPattern,
   canUndoPattern,
@@ -27,13 +35,6 @@ import {
   type RGB,
 } from "@/lib/pattern";
 
-type Crop = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
-
 type EditMode = "paint" | "select";
 
 type MobilePanel = "setup" | "pattern" | "palette" | "works";
@@ -43,28 +44,6 @@ type SelectionDraft = {
   startY: number;
   endX: number;
   endY: number;
-};
-
-type PaletteSourceKind = "builtin" | "imported" | "missing";
-
-type SavedProject = {
-  id: string;
-  title: string;
-  sourceName: string;
-  savedAt: string;
-  pattern: Pattern;
-  palette: BeadColor[];
-  settings: {
-    gridWidth: number;
-    gridHeight: number;
-    colorLimit: number;
-    ditherMode: DitherMode;
-    crop: Crop;
-    selectedCode: string;
-    paletteName?: string;
-    paletteSourceKind?: PaletteSourceKind;
-  };
-  thumbnail: string;
 };
 
 const BUILTIN_MARD_221_NAME = "MARD 221 标准色卡";
@@ -226,6 +205,7 @@ export function BeadPatternApp() {
     typeof window === "undefined" ? [] : readSavedProjects(),
   );
   const [pendingDeleteProjectId, setPendingDeleteProjectId] = useState<string | null>(null);
+  const [portfolioNotice, setPortfolioNotice] = useState("作品仅保存在当前设备，建议定期导出备份。");
   const [activeMobilePanel, setActiveMobilePanel] = useState<MobilePanel>("setup");
   const [status, setStatus] = useState("上传图片后会自动生成图纸。");
   const sourcePreviewRef = useRef<HTMLCanvasElement | null>(null);
@@ -526,8 +506,15 @@ export function BeadPatternApp() {
     };
     const existing = readSavedProjects().filter((project) => project.id !== savedProject.id);
     const nextProjects = [savedProject, ...existing].slice(0, MAX_SAVED_PROJECTS);
-    writeSavedProjects(nextProjects);
+    try {
+      writeSavedProjects(nextProjects);
+    } catch {
+      setPortfolioNotice("设备存储空间不足，请先备份并删除部分旧作品。");
+      setStatus("保存失败：设备存储空间不足。");
+      return;
+    }
     setSavedProjects(nextProjects);
+    setPortfolioNotice(`已保存作品「${title}」。`);
     setStatus(`已保存作品「${title}」。`);
   }
 
@@ -581,7 +568,47 @@ export function BeadPatternApp() {
     writeSavedProjects(nextProjects);
     setSavedProjects(nextProjects);
     setPendingDeleteProjectId(null);
+    setPortfolioNotice("已删除本地保存的作品。");
     setStatus("已删除本地保存的作品。");
+  }
+
+  function exportProjectsBackup() {
+    if (!savedProjects.length) {
+      setPortfolioNotice("还没有可备份的作品。");
+      return;
+    }
+    const backup = createProjectBackup(savedProjects);
+    const filename = `拼豆作品备份-${new Date().toISOString().slice(0, 10)}.beadproject`;
+    const blob = new Blob([backup], { type: "application/json;charset=utf-8" });
+    void deliverExportFile(blob, filename, "拼豆作品备份")
+      .then((delivery) => {
+        setPortfolioNotice(delivery === "shared" ? "备份文件已打开分享菜单。" : "作品备份已导出。");
+        void selectionHaptic();
+      })
+      .catch(() => setPortfolioNotice("备份导出失败，请重试。"));
+  }
+
+  function importProjectsBackup(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    file.text()
+      .then((text) => {
+        const imported = parseProjectBackup(text);
+        const nextProjects = mergeSavedProjects(readSavedProjects(), imported, MAX_SAVED_PROJECTS);
+        writeSavedProjects(nextProjects);
+        setSavedProjects(nextProjects);
+        setPendingDeleteProjectId(null);
+        setPortfolioNotice(`已导入 ${imported.length} 个作品，当前共有 ${nextProjects.length} 个。`);
+        void selectionHaptic();
+      })
+      .catch((error: unknown) => {
+        setPortfolioNotice(error instanceof Error ? error.message : "备份导入失败，请检查文件。");
+      })
+      .finally(() => {
+        input.value = "";
+      });
   }
 
   function showSetupPanel() {
@@ -1476,8 +1503,17 @@ export function BeadPatternApp() {
                 <p>保存在当前设备，可随时恢复编辑和导出。</p>
               </div>
             </div>
-            <button type="button" onClick={showSetupPanel}>添加作品</button>
+            <div className="portfolio-actions">
+              <label>
+                导入备份
+                <input type="file" accept=".beadproject,application/json" onChange={importProjectsBackup} />
+              </label>
+              <button type="button" onClick={exportProjectsBackup} disabled={!savedProjects.length}>备份作品</button>
+              <button type="button" onClick={showSetupPanel}>添加作品</button>
+            </div>
           </div>
+
+          <p className="portfolio-notice" aria-live="polite">{portfolioNotice}</p>
 
           <div className="portfolio-summary" aria-label="本地作品汇总">
             <div>

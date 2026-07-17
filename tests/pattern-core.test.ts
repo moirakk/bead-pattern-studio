@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { makePdfFromJpegPages } from "../lib/export/pdf";
+import { createProjectBackup, mergeSavedProjects, parseProjectBackup, type SavedProject } from "../lib/projects/backup";
 import {
   buildPattern,
   canRedoPattern,
@@ -188,4 +189,47 @@ test("builds a multi-page PDF from JPEG page images", async () => {
   assert.match(text, /^%PDF-1\.3/);
   assert.match(text, /\/Count 2/);
   assert.match(text, /\/Subtype \/Image/);
+});
+
+function makeSavedProject(id: string, savedAt: string): SavedProject {
+  const projectPattern = buildPattern([{ r: 255, g: 0, b: 0 }], 1, 1, [red], 1);
+  return {
+    id,
+    title: `Project ${id}`,
+    sourceName: `${id}.png`,
+    savedAt,
+    pattern: projectPattern,
+    palette: [red],
+    settings: {
+      gridWidth: 1,
+      gridHeight: 1,
+      colorLimit: 1,
+      ditherMode: "none",
+      crop: { x: 0, y: 0, width: 100, height: 100 },
+      selectedCode: "R",
+      paletteName: "Test",
+      paletteSourceKind: "imported",
+    },
+    thumbnail: "",
+  };
+}
+
+test("round-trips versioned project backups", () => {
+  const project = makeSavedProject("one", "2026-07-17T08:00:00.000Z");
+  const backup = createProjectBackup([project], "2026-07-17T09:00:00.000Z");
+  const restored = parseProjectBackup(backup);
+
+  assert.deepEqual(restored, [project]);
+  assert.throws(() => parseProjectBackup('{"format":"unknown","version":1,"projects":[]}'), /无法识别/);
+});
+
+test("merges project backups by id and keeps the newest copy", () => {
+  const oldProject = makeSavedProject("same", "2026-07-16T08:00:00.000Z");
+  const newProject = makeSavedProject("same", "2026-07-17T08:00:00.000Z");
+  const another = makeSavedProject("another", "2026-07-15T08:00:00.000Z");
+  const merged = mergeSavedProjects([oldProject, another], [newProject], 12);
+
+  assert.equal(merged.length, 2);
+  assert.equal(merged[0].savedAt, newProject.savedAt);
+  assert.equal(merged.find((project) => project.id === "same")?.savedAt, newProject.savedAt);
 });
