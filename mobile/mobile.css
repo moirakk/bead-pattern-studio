@@ -1,0 +1,41 @@
+html[data-platform="ios"] {
+  background: var(--background);
+  overscroll-behavior: none;
+}
+
+html[data-platform="ios"] body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+html[data-platform="ios"] button,
+html[data-platform="ios"] input,
+html[data-platform="ios"] select,
+html[data-platform="ios"] label {
+  touch-action: manipulation;
+}
+
+html[data-platform="ios"] .bead-app {
+  min-height: 100dvh;
+  padding-top: calc(12px + env(safe-area-inset-top));
+}
+
+@media (max-width: 1500px) {
+  html[data-platform="ios"] .mobile-tabbar {
+    right: 0;
+    bottom: 0;
+    left: 0;
+    max-width: none;
+    padding: 7px 12px calc(7px + env(safe-area-inset-bottom));
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 16px 16px 0 0;
+  }
+
+  html[data-platform="ios"] .paint-bar {
+    bottom: calc(70px + env(safe-area-inset-bottom));
+  }
+}

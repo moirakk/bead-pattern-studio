@@ -2,6 +2,7 @@
 
 import { ChangeEvent, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { makePdfFromJpegPages } from "@/lib/export/pdf";
+import { deliverExportFile, selectionHaptic } from "@/lib/native/share";
 import {
   buildPattern,
   canRedoPattern,
@@ -78,15 +79,6 @@ const A4_CANVAS = {
 
 const SAVED_PROJECTS_KEY = "bead-pattern-studio.saved-projects.v1";
 const MAX_SAVED_PROJECTS = 12;
-
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
 
 function stripFileExtension(filename: string) {
   return filename.replace(/\.[^/.]+$/, "");
@@ -1125,7 +1117,13 @@ export function BeadPatternApp() {
     const canvas = makeExportCanvas();
     if (!canvas) return;
     canvas.toBlob((blob) => {
-      if (blob) downloadBlob(blob, `${exportFilename}-pattern.png`);
+      if (!blob) return;
+      void deliverExportFile(blob, `${exportFilename}-pattern.png`, `${projectTitle} PNG 图纸`)
+        .then((delivery) => {
+          setStatus(delivery === "shared" ? "PNG 图纸已打开分享菜单。" : "PNG 图纸已导出。");
+          void selectionHaptic();
+        })
+        .catch(() => setStatus("PNG 导出失败，请重试。"));
     }, "image/png");
   }
 
@@ -1146,7 +1144,12 @@ export function BeadPatternApp() {
         imageHeight: page.height,
       })),
     );
-    downloadBlob(pdf, `${exportFilename}-a4.pdf`);
+    void deliverExportFile(pdf, `${exportFilename}-a4.pdf`, `${projectTitle} PDF 图纸`)
+      .then((delivery) => {
+        setStatus(delivery === "shared" ? "PDF 图纸已打开分享菜单。" : "PDF 图纸已导出。");
+        void selectionHaptic();
+      })
+      .catch(() => setStatus("PDF 导出失败，请重试。"));
   }
 
   return (
@@ -1260,6 +1263,10 @@ export function BeadPatternApp() {
             <input type="checkbox" checked={keepRatio} onChange={(event) => setKeepRatio(event.target.checked)} />
             按源图比例自动高度
           </label>
+          <div className="local-processing-note" role="note">
+            <strong>图片仅在本机处理</strong>
+            <span>无需登录，不上传原图；作品保存在当前设备。</span>
+          </div>
           <label className="slider-label">
             色数上限：{colorLimit}
             <input

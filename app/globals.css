@@ -185,6 +185,27 @@ button:disabled {
   text-align: center;
 }
 
+.local-processing-note {
+  display: grid;
+  gap: 4px;
+  margin: 14px 0;
+  padding: 12px 14px;
+  color: var(--teal-dark);
+  background: #eef8f6;
+  border: 1px solid #bde2dd;
+  border-radius: 8px;
+}
+
+.local-processing-note strong {
+  font-size: 13px;
+}
+
+.local-processing-note span {
+  color: #4d6970;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .file-drop input {
   position: absolute;
   width: 1px;
