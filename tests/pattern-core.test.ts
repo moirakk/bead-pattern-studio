@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { makePdfFromJpegPages } from "../lib/export/pdf";
+import { calculatePosterPatternRect } from "../lib/export/project-poster";
 import { createProjectBackup, mergeSavedProjects, parseProjectBackup, type SavedProject } from "../lib/projects/backup";
-import { duplicateSavedProject, filterAndSortProjects, renameSavedProject } from "../lib/projects/library";
+import { duplicateSavedProject, filterAndSortProjects, renameSavedProject, setSavedProjectCategory } from "../lib/projects/library";
 import { loadSavedProjects, saveSavedProjects } from "../lib/projects/storage";
 import {
   buildPattern,
@@ -276,13 +277,16 @@ test("searches and sorts the project library", () => {
   const small = makeSavedProject("small", "2026-07-16T10:00:00.000Z");
   small.title = "A 蓝色小花";
   small.sourceName = "flower.png";
+  small.category = "花卉";
   const large = makeSavedProject("large", "2026-07-17T10:00:00.000Z");
   large.title = "B 红色图案";
+  large.category = "游戏";
   large.pattern = { ...large.pattern, cells: [...large.pattern.cells, ...large.pattern.cells] };
 
   assert.deepEqual(filterAndSortProjects([small, large], "flower", "latest"), [small]);
   assert.deepEqual(filterAndSortProjects([small, large], "", "beads"), [large, small]);
   assert.deepEqual(filterAndSortProjects([large, small], "", "name"), [small, large]);
+  assert.deepEqual(filterAndSortProjects([small, large], "", "latest", "花卉"), [small]);
 });
 
 test("renames and duplicates saved projects without changing the original", () => {
@@ -295,4 +299,18 @@ test("renames and duplicates saved projects without changing the original", () =
   assert.equal(copy.title, `${original.title} 副本`);
   assert.notEqual(copy.pattern.cells, original.pattern.cells);
   assert.throws(() => renameSavedProject(original, "   "), /不能为空/);
+});
+
+test("updates project categories and calculates bounded poster previews", () => {
+  const original = makeSavedProject("category", "2026-07-17T10:00:00.000Z");
+  const categorized = setSavedProjectCategory(original, "动漫");
+  const wide = calculatePosterPatternRect(100, 50);
+  const tall = calculatePosterPatternRect(50, 100);
+
+  assert.equal(categorized.category, "动漫");
+  assert.equal(original.category, undefined);
+  assert.ok(wide.width <= 860 && wide.height <= 650);
+  assert.ok(tall.width <= 860 && tall.height <= 650);
+  assert.equal(wide.width / wide.height, 2);
+  assert.equal(tall.height / tall.width, 2);
 });

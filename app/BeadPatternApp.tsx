@@ -2,6 +2,7 @@
 
 import { ChangeEvent, FormEvent, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { makePdfFromJpegPages } from "@/lib/export/pdf";
+import { createProjectPosterBlob } from "@/lib/export/project-poster";
 import { deliverExportFile, selectionHaptic } from "@/lib/native/share";
 import {
   createProjectBackup,
@@ -15,7 +16,11 @@ import { loadSavedProjects, saveSavedProjects } from "@/lib/projects/storage";
 import {
   duplicateSavedProject,
   filterAndSortProjects,
+  PROJECT_CATEGORIES,
   renameSavedProject,
+  setSavedProjectCategory,
+  type ProjectCategory,
+  type ProjectCategoryFilter,
   type ProjectSort,
 } from "@/lib/projects/library";
 import {
@@ -201,6 +206,8 @@ export function BeadPatternApp() {
   const [renameDraft, setRenameDraft] = useState("");
   const [projectQuery, setProjectQuery] = useState("");
   const [projectSort, setProjectSort] = useState<ProjectSort>("latest");
+  const [projectCategoryFilter, setProjectCategoryFilter] = useState<ProjectCategoryFilter>("全部分类");
+  const [sharingProjectId, setSharingProjectId] = useState<string | null>(null);
   const [portfolioNotice, setPortfolioNotice] = useState("正在读取当前设备的作品库...");
   const [activeMobilePanel, setActiveMobilePanel] = useState<MobilePanel>("setup");
   const [status, setStatus] = useState("上传图片后会自动生成图纸。");
@@ -229,8 +236,8 @@ export function BeadPatternApp() {
     [savedProjects],
   );
   const visibleProjects = useMemo(
-    () => filterAndSortProjects(savedProjects, projectQuery, projectSort),
-    [savedProjects, projectQuery, projectSort],
+    () => filterAndSortProjects(savedProjects, projectQuery, projectSort, projectCategoryFilter),
+    [savedProjects, projectQuery, projectSort, projectCategoryFilter],
   );
   const canUndo = canUndoPattern(patternHistory);
   const canRedo = canRedoPattern(patternHistory);
@@ -515,6 +522,7 @@ export function BeadPatternApp() {
       title,
       sourceName: imageName,
       savedAt: now,
+      category: "未分类",
       pattern,
       palette,
       settings: {
@@ -637,6 +645,33 @@ export function BeadPatternApp() {
       void selectionHaptic();
     } catch {
       setPortfolioNotice("复制作品失败，请检查设备存储空间。");
+    }
+  }
+
+  async function changeProjectCategory(project: SavedProject, category: ProjectCategory) {
+    const nextProjects = savedProjects.map((item) =>
+      item.id === project.id ? setSavedProjectCategory(item, category) : item,
+    );
+    try {
+      await saveSavedProjects(nextProjects);
+      setSavedProjects(nextProjects);
+      setPortfolioNotice(`已将「${project.title}」归入${category}。`);
+    } catch {
+      setPortfolioNotice("分类保存失败，请稍后重试。");
+    }
+  }
+
+  async function shareSavedProject(project: SavedProject) {
+    setSharingProjectId(project.id);
+    try {
+      const blob = await createProjectPosterBlob(project);
+      const delivery = await deliverExportFile(blob, `${makeSafeFilename(project.title)}-分享海报.png`, `${project.title} 分享海报`);
+      setPortfolioNotice(delivery === "shared" ? "作品海报已打开分享菜单。" : "作品海报已导出。");
+      void selectionHaptic();
+    } catch {
+      setPortfolioNotice("作品海报生成失败，请稍后重试。");
+    } finally {
+      setSharingProjectId(null);
     }
   }
 
@@ -1608,6 +1643,14 @@ export function BeadPatternApp() {
               aria-label="搜索作品名称"
             />
             <select
+              value={projectCategoryFilter}
+              onChange={(event) => setProjectCategoryFilter(event.target.value as ProjectCategoryFilter)}
+              aria-label="作品分类筛选"
+            >
+              <option value="全部分类">全部分类</option>
+              {PROJECT_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
+            </select>
+            <select
               value={projectSort}
               onChange={(event) => setProjectSort(event.target.value as ProjectSort)}
               aria-label="作品排序"
@@ -1648,10 +1691,21 @@ export function BeadPatternApp() {
                     </small>
                     <small>{project.palette.length} 个可用色号 · 使用 {summarizePattern(project.pattern, project.palette).length} 色</small>
                     <small>{new Date(project.savedAt).toLocaleString("zh-CN", { dateStyle: "short", timeStyle: "short" })}</small>
+                    <select
+                      className="saved-project-category"
+                      value={(project.category ?? "未分类") as ProjectCategory}
+                      onChange={(event) => void changeProjectCategory(project, event.target.value as ProjectCategory)}
+                      aria-label={`${project.title} 分类`}
+                    >
+                      {PROJECT_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
+                    </select>
                   </div>
                   <div className="saved-project-actions">
                     <button type="button" onClick={() => restoreProject(project)}>
                       打开编辑
+                    </button>
+                    <button type="button" onClick={() => void shareSavedProject(project)} disabled={sharingProjectId === project.id}>
+                      {sharingProjectId === project.id ? "生成中" : "分享海报"}
                     </button>
                     <button type="button" onClick={() => startProjectRename(project)}>
                       重命名
@@ -1678,8 +1732,8 @@ export function BeadPatternApp() {
             ) : savedProjects.length ? (
               <div className="portfolio-empty">
                 <strong>没有找到相关作品</strong>
-                <span>换一个名称试试。</span>
-                <button type="button" onClick={() => setProjectQuery("")}>清除搜索</button>
+                <span>调整搜索内容或作品分类。</span>
+                <button type="button" onClick={() => { setProjectQuery(""); setProjectCategoryFilter("全部分类"); }}>清除筛选</button>
               </div>
             ) : (
               <div className="portfolio-empty">

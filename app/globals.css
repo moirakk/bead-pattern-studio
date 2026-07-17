@@ -813,7 +813,7 @@ input[type="range"] {
 
 .portfolio-library-tools {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) 160px auto;
+  grid-template-columns: minmax(220px, 1fr) 140px 160px auto;
   gap: 8px;
   align-items: center;
   margin: 0 0 12px;
@@ -920,6 +920,19 @@ input[type="range"] {
   margin-top: 3px;
   color: var(--muted);
   font-size: 12px;
+}
+
+.saved-project-category {
+  min-width: 92px;
+  min-height: 30px;
+  margin-top: 7px;
+  padding: 0 8px;
+  color: var(--teal-dark);
+  background: #eef8f6;
+  border: 1px solid #c6e4e1;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .saved-project-actions {
@@ -1248,6 +1261,10 @@ input[type="range"] {
 
   .portfolio-library-tools {
     grid-template-columns: minmax(0, 1fr) 128px;
+  }
+
+  .portfolio-library-tools > input {
+    grid-column: 1 / -1;
   }
 
   .portfolio-library-tools small {

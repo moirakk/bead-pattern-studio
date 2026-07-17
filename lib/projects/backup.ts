@@ -14,6 +14,7 @@ export type SavedProject = {
   title: string;
   sourceName: string;
   savedAt: string;
+  category?: string;
   pattern: Pattern;
   palette: BeadColor[];
   settings: {
@@ -99,6 +100,7 @@ function parseSavedProject(value: unknown): SavedProject | null {
   if (!isRecord(value)) return null;
   if (!isShortString(value.id, 200) || !isShortString(value.title, 200) || !isShortString(value.sourceName, 300)) return null;
   if (typeof value.savedAt !== "string" || !Number.isFinite(Date.parse(value.savedAt))) return null;
+  if (value.category !== undefined && !isShortString(value.category, 40)) return null;
   if (!isPattern(value.pattern) || !Array.isArray(value.palette) || value.palette.length > MAX_PALETTE_COLORS) return null;
   if (!value.palette.every(isBeadColor) || !isSettings(value.settings)) return null;
   if (typeof value.thumbnail !== "string" || value.thumbnail.length > MAX_THUMBNAIL_LENGTH) return null;
