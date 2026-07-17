@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { makePdfFromJpegPages } from "@/lib/export/pdf";
 import { deliverExportFile, selectionHaptic } from "@/lib/native/share";
 import {
@@ -12,6 +12,12 @@ import {
   type SavedProject,
 } from "@/lib/projects/backup";
 import { loadSavedProjects, saveSavedProjects } from "@/lib/projects/storage";
+import {
+  duplicateSavedProject,
+  filterAndSortProjects,
+  renameSavedProject,
+  type ProjectSort,
+} from "@/lib/projects/library";
 import {
   buildPattern,
   canRedoPattern,
@@ -191,6 +197,10 @@ export function BeadPatternApp() {
   const [savedProjects, setSavedProjects] = useState<SavedProject[]>([]);
   const [projectsReady, setProjectsReady] = useState(false);
   const [pendingDeleteProjectId, setPendingDeleteProjectId] = useState<string | null>(null);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [projectQuery, setProjectQuery] = useState("");
+  const [projectSort, setProjectSort] = useState<ProjectSort>("latest");
   const [portfolioNotice, setPortfolioNotice] = useState("正在读取当前设备的作品库...");
   const [activeMobilePanel, setActiveMobilePanel] = useState<MobilePanel>("setup");
   const [status, setStatus] = useState("上传图片后会自动生成图纸。");
@@ -217,6 +227,10 @@ export function BeadPatternApp() {
   const savedBeanTotal = useMemo(
     () => savedProjects.reduce((total, project) => total + project.pattern.cells.length, 0),
     [savedProjects],
+  );
+  const visibleProjects = useMemo(
+    () => filterAndSortProjects(savedProjects, projectQuery, projectSort),
+    [savedProjects, projectQuery, projectSort],
   );
   const canUndo = canUndoPattern(patternHistory);
   const canRedo = canRedoPattern(patternHistory);
@@ -580,10 +594,49 @@ export function BeadPatternApp() {
       await saveSavedProjects(nextProjects);
       setSavedProjects(nextProjects);
       setPendingDeleteProjectId(null);
+      if (editingProjectId === projectId) setEditingProjectId(null);
       setPortfolioNotice("已删除本地保存的作品。");
       setStatus("已删除本地保存的作品。");
     } catch {
       setPortfolioNotice("删除失败，请稍后重试。");
+    }
+  }
+
+  function startProjectRename(project: SavedProject) {
+    setEditingProjectId(project.id);
+    setRenameDraft(project.title);
+    setPendingDeleteProjectId(null);
+  }
+
+  async function confirmProjectRename(event: FormEvent<HTMLFormElement>, project: SavedProject) {
+    event.preventDefault();
+    try {
+      const renamed = renameSavedProject(project, renameDraft);
+      const nextProjects = mergeSavedProjects(
+        [],
+        savedProjects.map((item) => item.id === project.id ? renamed : item),
+        MAX_SAVED_PROJECTS,
+      );
+      await saveSavedProjects(nextProjects);
+      setSavedProjects(nextProjects);
+      setEditingProjectId(null);
+      setPortfolioNotice(`已重命名为「${renamed.title}」。`);
+    } catch (error: unknown) {
+      setPortfolioNotice(error instanceof Error ? error.message : "重命名失败，请重试。");
+    }
+  }
+
+  async function copySavedProject(project: SavedProject) {
+    const copy = duplicateSavedProject(project, `${project.id}-copy-${Date.now()}`);
+    const nextProjects = [copy, ...savedProjects].slice(0, MAX_SAVED_PROJECTS);
+    try {
+      await saveSavedProjects(nextProjects);
+      setSavedProjects(nextProjects);
+      setPendingDeleteProjectId(null);
+      setPortfolioNotice(`已创建「${copy.title}」。`);
+      void selectionHaptic();
+    } catch {
+      setPortfolioNotice("复制作品失败，请检查设备存储空间。");
     }
   }
 
@@ -1546,14 +1599,50 @@ export function BeadPatternApp() {
             </div>
           </div>
 
+          <div className="portfolio-library-tools">
+            <input
+              type="search"
+              value={projectQuery}
+              onChange={(event) => setProjectQuery(event.target.value)}
+              placeholder="搜索作品名称"
+              aria-label="搜索作品名称"
+            />
+            <select
+              value={projectSort}
+              onChange={(event) => setProjectSort(event.target.value as ProjectSort)}
+              aria-label="作品排序"
+            >
+              <option value="latest">按最近保存</option>
+              <option value="name">按名称</option>
+              <option value="beads">按豆数</option>
+            </select>
+            <small>{visibleProjects.length === savedProjects.length ? `${savedProjects.length} 个作品` : `找到 ${visibleProjects.length} 个`}</small>
+          </div>
+
           <div className="saved-projects" aria-label="本地保存作品">
-            {savedProjects.length ? (
-              savedProjects.map((project) => (
+            {visibleProjects.length ? (
+              visibleProjects.map((project) => (
                 <article className="saved-project" key={project.id}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   {project.thumbnail ? <img src={project.thumbnail} alt={`${project.title} 拼豆图纸缩略图`} /> : <div className="saved-thumb-placeholder" />}
-                  <div>
-                    <strong>{project.title}</strong>
+                  <div className="saved-project-details">
+                    {editingProjectId === project.id ? (
+                      <form className="project-rename-form" onSubmit={(event) => void confirmProjectRename(event, project)}>
+                        <input
+                          value={renameDraft}
+                          onChange={(event) => setRenameDraft(event.target.value)}
+                          maxLength={200}
+                          aria-label="新作品名称"
+                          autoFocus
+                        />
+                        <div>
+                          <button type="submit">保存名称</button>
+                          <button type="button" onClick={() => setEditingProjectId(null)}>取消</button>
+                        </div>
+                      </form>
+                    ) : (
+                      <strong>{project.title}</strong>
+                    )}
                     <small>
                       {project.pattern.width} x {project.pattern.height} · {formatCount(project.pattern.cells.length)} 颗
                     </small>
@@ -1563,6 +1652,12 @@ export function BeadPatternApp() {
                   <div className="saved-project-actions">
                     <button type="button" onClick={() => restoreProject(project)}>
                       打开编辑
+                    </button>
+                    <button type="button" onClick={() => startProjectRename(project)}>
+                      重命名
+                    </button>
+                    <button type="button" onClick={() => void copySavedProject(project)}>
+                      复制
                     </button>
                     <button
                       type="button"
@@ -1580,6 +1675,12 @@ export function BeadPatternApp() {
                   </div>
                 </article>
               ))
+            ) : savedProjects.length ? (
+              <div className="portfolio-empty">
+                <strong>没有找到相关作品</strong>
+                <span>换一个名称试试。</span>
+                <button type="button" onClick={() => setProjectQuery("")}>清除搜索</button>
+              </div>
             ) : (
               <div className="portfolio-empty">
                 <strong>还没有保存的作品</strong>

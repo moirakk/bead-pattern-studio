@@ -811,6 +811,42 @@ input[type="range"] {
   white-space: nowrap;
 }
 
+.portfolio-library-tools {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 160px auto;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 12px;
+}
+
+.portfolio-library-tools input,
+.portfolio-library-tools select,
+.project-rename-form input {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 11px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  outline: none;
+}
+
+.portfolio-library-tools input:focus,
+.portfolio-library-tools select:focus,
+.project-rename-form input:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(31, 154, 148, 0.12);
+}
+
+.portfolio-library-tools small {
+  min-width: 76px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+}
+
 .saved-project {
   display: grid;
   grid-template-columns: 86px minmax(0, 1fr);
@@ -844,6 +880,42 @@ input[type="range"] {
   white-space: nowrap;
 }
 
+.saved-project-details {
+  min-width: 0;
+}
+
+.project-rename-form {
+  display: grid;
+  gap: 6px;
+}
+
+.project-rename-form input {
+  min-height: 34px;
+  font-size: 13px;
+}
+
+.project-rename-form div {
+  display: flex;
+  gap: 6px;
+}
+
+.project-rename-form button {
+  min-height: 30px;
+  padding: 0 9px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.project-rename-form button:first-child {
+  color: #fff;
+  background: var(--teal-dark);
+  border-color: var(--teal-dark);
+}
+
 .saved-project small {
   margin-top: 3px;
   color: var(--muted);
@@ -851,10 +923,10 @@ input[type="range"] {
 }
 
 .saved-project-actions {
-  display: flex;
+  display: grid;
   grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  justify-content: flex-end;
 }
 
 .saved-project-actions button {
@@ -1172,6 +1244,15 @@ input[type="range"] {
 
   .portfolio-summary div:last-child {
     grid-column: 1 / -1;
+  }
+
+  .portfolio-library-tools {
+    grid-template-columns: minmax(0, 1fr) 128px;
+  }
+
+  .portfolio-library-tools small {
+    grid-column: 1 / -1;
+    text-align: left;
   }
 
   .saved-projects {

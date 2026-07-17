@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { makePdfFromJpegPages } from "../lib/export/pdf";
 import { createProjectBackup, mergeSavedProjects, parseProjectBackup, type SavedProject } from "../lib/projects/backup";
+import { duplicateSavedProject, filterAndSortProjects, renameSavedProject } from "../lib/projects/library";
 import { loadSavedProjects, saveSavedProjects } from "../lib/projects/storage";
 import {
   buildPattern,
@@ -269,4 +270,29 @@ test("falls back to local storage when IndexedDB is unavailable", async () => {
   assert.equal(backend, "localstorage");
   assert.equal(loaded.backend, "localstorage");
   assert.deepEqual(loaded.projects, [project]);
+});
+
+test("searches and sorts the project library", () => {
+  const small = makeSavedProject("small", "2026-07-16T10:00:00.000Z");
+  small.title = "A 蓝色小花";
+  small.sourceName = "flower.png";
+  const large = makeSavedProject("large", "2026-07-17T10:00:00.000Z");
+  large.title = "B 红色图案";
+  large.pattern = { ...large.pattern, cells: [...large.pattern.cells, ...large.pattern.cells] };
+
+  assert.deepEqual(filterAndSortProjects([small, large], "flower", "latest"), [small]);
+  assert.deepEqual(filterAndSortProjects([small, large], "", "beads"), [large, small]);
+  assert.deepEqual(filterAndSortProjects([large, small], "", "name"), [small, large]);
+});
+
+test("renames and duplicates saved projects without changing the original", () => {
+  const original = makeSavedProject("original", "2026-07-16T10:00:00.000Z");
+  const renamed = renameSavedProject(original, "  新 名称  ", "2026-07-17T10:00:00.000Z");
+  const copy = duplicateSavedProject(original, "copy", "2026-07-17T11:00:00.000Z");
+
+  assert.equal(renamed.title, "新 名称");
+  assert.equal(copy.id, "copy");
+  assert.equal(copy.title, `${original.title} 副本`);
+  assert.notEqual(copy.pattern.cells, original.pattern.cells);
+  assert.throws(() => renameSavedProject(original, "   "), /不能为空/);
 });
