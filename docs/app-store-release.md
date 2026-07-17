@@ -43,7 +43,8 @@
 - 跟踪：否
 - 登录：无
 - 广告：无
-- 隐私政策：部署后使用 `/privacy.html`
+- 产品主页：`https://bead-pattern-studio.vercel.app/`
+- 隐私政策：`https://bead-pattern-studio.vercel.app/privacy.html`
 
 添加社区、账号、分析或云同步功能后，必须重新核对隐私申报。
 
