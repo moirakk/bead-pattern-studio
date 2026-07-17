@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { COMMUNITY_SAMPLE_POSTS, createPreviewPattern, selectCommunityPosts } from "../lib/community/feed";
+import { COMMUNITY_SAMPLE_POSTS, createPreviewPattern, selectCommunityPosts, summarizePreviewPatternColors } from "../lib/community/feed";
 import { createRemixedProject } from "../lib/community/remix";
 import { makePdfFromJpegPages } from "../lib/export/pdf";
 import { calculatePosterPatternRect } from "../lib/export/project-poster";
@@ -17,6 +17,7 @@ import {
   createPatternHistory,
   hexToRgb,
   makeMard221Palette,
+  makeMard291Palette,
   nearestColor,
   paintPatternArea,
   paintPatternCell,
@@ -182,6 +183,17 @@ test("loads built-in MARD 221 palette with verified sample codes", () => {
   assert.equal(byCode.get("M15"), "#757d78");
 });
 
+test("loads the MARD 291 full palette with the 70 extended colors", () => {
+  const mard = makeMard291Palette();
+  const byCode = new Map(mard.map((color) => [color.code, color.hex]));
+
+  assert.equal(mard.length, 291);
+  assert.equal(byCode.get("P1"), "#fcf7f8");
+  assert.equal(byCode.get("R28"), "#9c87d6");
+  assert.equal(byCode.get("ZG8"), "#ab91c0");
+  assert.equal(new Set(mard.map((color) => color.code)).size, 291);
+});
+
 test("builds a multi-page PDF from JPEG page images", async () => {
   const tinyJpeg = `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString("base64")}`;
   const pdf = makePdfFromJpegPages([
@@ -327,14 +339,14 @@ test("builds and filters the community preview feed", () => {
   assert.equal(latest[0].id, "sample-mountain");
   assert.ok(flowers.every((post) => post.category === "花卉"));
   assert.deepEqual(saved.map((post) => post.id), ["sample-duck"]);
-  assert.ok(COMMUNITY_SAMPLE_POSTS.every((post) => post.paletteName === "MARD 221 标准色卡"));
+  assert.ok(COMMUNITY_SAMPLE_POSTS.every((post) => post.paletteName === "MARD 291 全色色卡"));
   assert.ok(COMMUNITY_SAMPLE_POSTS.every((post) => post.updates.length >= 2));
 });
 
-test("remixes a community pattern into an editable MARD 221 project with attribution", () => {
+test("remixes a community pattern into an editable MARD 291 project with attribution", () => {
   const post = COMMUNITY_SAMPLE_POSTS[0];
   const project = createRemixedProject(post, "remix-test", "2026-07-17T12:00:00.000Z");
-  const mardCodes = new Set(makeMard221Palette().map((color) => color.code));
+  const mardCodes = new Set(makeMard291Palette().map((color) => color.code));
 
   assert.equal(project.id, "remix-test");
   assert.equal(project.title, `${post.title} 复刻`);
@@ -346,4 +358,15 @@ test("remixes a community pattern into an editable MARD 221 project with attribu
 
   const restored = parseProjectBackup(createProjectBackup([project]));
   assert.deepEqual(restored[0].remixSource, project.remixSource);
+});
+
+test("summarizes community colors in natural MARD code order", () => {
+  const usage = summarizePreviewPatternColors(COMMUNITY_SAMPLE_POSTS[0].pattern);
+  const sortedCodes = usage.map((item) => item.code).toSorted((a, b) =>
+    a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }),
+  );
+
+  assert.deepEqual(usage.map((item) => item.code), sortedCodes);
+  assert.equal(usage.reduce((total, item) => total + item.count, 0), COMMUNITY_SAMPLE_POSTS[0].pattern.cells.length);
+  assert.ok(usage.every((item) => item.code && item.name && item.count > 0));
 });

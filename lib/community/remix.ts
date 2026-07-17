@@ -1,13 +1,13 @@
 import type { CommunityPost } from "@/lib/community/feed";
 import type { SavedProject } from "@/lib/projects/backup";
-import { buildPattern, hexToRgb, makeMard221Palette } from "@/lib/pattern";
+import { buildPattern, hexToRgb, makeMard291Palette } from "@/lib/pattern";
 
 export function createRemixedProject(
   post: CommunityPost,
   id = `remix-${post.id}-${Date.now()}`,
   savedAt = new Date().toISOString(),
 ): SavedProject {
-  const palette = makeMard221Palette();
+  const palette = makeMard291Palette();
   const pattern = buildPattern(
     post.pattern.cells.map(hexToRgb),
     post.pattern.width,
@@ -36,7 +36,7 @@ export function createRemixedProject(
       ditherMode: "none",
       crop: { x: 0, y: 0, width: 100, height: 100 },
       selectedCode: pattern.cells[0]?.code ?? "H7",
-      paletteName: "MARD 221 标准色卡",
+      paletteName: "MARD 291 全色色卡",
       paletteSourceKind: "builtin",
     },
     thumbnail: "",

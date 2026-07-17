@@ -1,5 +1,5 @@
 import type { ProjectCategory } from "@/lib/projects/library";
-import { hexToRgb, makeMard221Palette, nearestColor } from "@/lib/pattern";
+import { hexToRgb, makeMard291Palette, nearestColor } from "@/lib/pattern";
 
 export type CommunityView = "popular" | "latest" | "saved";
 
@@ -29,6 +29,13 @@ export type CommunityUpdate = {
   id: string;
   message: string;
   publishedAt: string;
+};
+
+export type CommunityColorUsage = {
+  code: string;
+  name: string;
+  hex: string;
+  count: number;
 };
 
 export function selectCommunityPosts(
@@ -64,7 +71,31 @@ export function countPreviewPatternColors(pattern: CommunityPreviewPattern) {
   return new Set(pattern.cells).size;
 }
 
-const MARD_221 = makeMard221Palette();
+export function summarizePreviewPatternColors(pattern: CommunityPreviewPattern): CommunityColorUsage[] {
+  const counts = new Map<string, CommunityColorUsage>();
+  const matchedByHex = new Map<string, (typeof MARD_291)[number]>();
+
+  pattern.cells.forEach((hex) => {
+    let color = matchedByHex.get(hex);
+    if (!color) {
+      color = nearestColor(hexToRgb(hex), MARD_291);
+      matchedByHex.set(hex, color);
+    }
+    const current = counts.get(color.code);
+    counts.set(color.code, {
+      code: color.code,
+      name: color.name,
+      hex: color.hex,
+      count: (current?.count ?? 0) + 1,
+    });
+  });
+
+  return [...counts.values()].sort((a, b) =>
+    a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: "base" }),
+  );
+}
+
+const MARD_291 = makeMard291Palette();
 
 function matchPatternToMard(pattern: CommunityPreviewPattern): CommunityPreviewPattern {
   const colorCache = new Map<string, string>();
@@ -73,7 +104,7 @@ function matchPatternToMard(pattern: CommunityPreviewPattern): CommunityPreviewP
     cells: pattern.cells.map((hex) => {
       const cached = colorCache.get(hex);
       if (cached) return cached;
-      const matched = nearestColor(hexToRgb(hex), MARD_221).hex;
+      const matched = nearestColor(hexToRgb(hex), MARD_291).hex;
       colorCache.set(hex, matched);
       return matched;
     }),
@@ -124,7 +155,7 @@ export const COMMUNITY_SAMPLE_POSTS: CommunityPost[] = [
     category: "花卉",
     description: "18 x 18 小尺寸配色练习",
     pattern: cherryPattern,
-    paletteName: "MARD 221 标准色卡",
+    paletteName: "MARD 291 全色色卡",
     remixLicense: "允许复刻，请标注原作者",
     likes: 128,
     saves: 46,
@@ -142,7 +173,7 @@ export const COMMUNITY_SAMPLE_POSTS: CommunityPost[] = [
     category: "花卉",
     description: "适合胸针和冰箱贴",
     pattern: flowerPattern,
-    paletteName: "MARD 221 标准色卡",
+    paletteName: "MARD 291 全色色卡",
     remixLicense: "允许复刻，请标注原作者",
     likes: 96,
     saves: 38,
@@ -160,7 +191,7 @@ export const COMMUNITY_SAMPLE_POSTS: CommunityPost[] = [
     category: "动物",
     description: "低色数迷你豆图案",
     pattern: duckPattern,
-    paletteName: "MARD 221 标准色卡",
+    paletteName: "MARD 291 全色色卡",
     remixLicense: "允许复刻，请标注原作者",
     likes: 174,
     saves: 62,
@@ -168,7 +199,7 @@ export const COMMUNITY_SAMPLE_POSTS: CommunityPost[] = [
     publishedAt: "2026-07-15T11:00:00.000Z",
     updates: [
       { id: "duck-3", message: "补充水面细节", publishedAt: "2026-07-15T11:00:00.000Z" },
-      { id: "duck-2", message: "统一为 MARD 221 色号", publishedAt: "2026-07-14T05:40:00.000Z" },
+      { id: "duck-2", message: "统一为 MARD 291 色号", publishedAt: "2026-07-14T05:40:00.000Z" },
       { id: "duck-1", message: "首次分享", publishedAt: "2026-07-12T09:10:00.000Z" },
     ],
   },
@@ -179,7 +210,7 @@ export const COMMUNITY_SAMPLE_POSTS: CommunityPost[] = [
     category: "风景",
     description: "自然色系方形挂画",
     pattern: mountainPattern,
-    paletteName: "MARD 221 标准色卡",
+    paletteName: "MARD 291 全色色卡",
     remixLicense: "允许复刻，请标注原作者",
     likes: 82,
     saves: 31,

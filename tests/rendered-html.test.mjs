@@ -34,6 +34,8 @@ test("server-renders the bead pattern studio shell", async () => {
   assert.match(html, /上传图片/);
   assert.match(html, /图纸编辑/);
   assert.match(html, /导入店铺色卡 CSV/);
+  assert.match(html, /291 全色/);
+  assert.match(html, /221 常用/);
   assert.match(html, /我的拼豆作品/);
   assert.match(html, /上传第一张图片/);
   assert.match(html, /导入备份/);

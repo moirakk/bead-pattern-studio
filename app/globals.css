@@ -535,6 +535,31 @@ input[type="range"] {
   border-radius: 8px;
 }
 
+.palette-preset-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 12px;
+  padding: 4px;
+  background: #eef2f4;
+  border-radius: 8px;
+}
+
+.palette-preset-switch button {
+  min-height: 38px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.palette-preset-switch button.active {
+  color: #fff;
+  background: var(--teal-dark);
+}
+
 .palette-source {
   display: grid;
   gap: 4px;
@@ -555,18 +580,6 @@ input[type="range"] {
 
 .palette-source strong {
   color: inherit;
-}
-
-.palette-source button {
-  justify-self: start;
-  min-height: 32px;
-  padding: 0 12px;
-  color: #fff;
-  background: var(--teal-dark);
-  border: 0;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 800;
 }
 
 .palette-grid {
@@ -1374,9 +1387,56 @@ input[type="range"] {
 }
 
 .community-about,
+.community-colors,
 .community-updates {
   padding: 20px 0;
   border-bottom: 1px solid var(--line);
+}
+
+.community-colors .community-section-title small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.community-color-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 18px;
+  margin-top: 8px;
+}
+
+.community-color-list > div {
+  display: grid;
+  grid-template-columns: 24px 46px minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+  min-height: 40px;
+  border-top: 1px solid #e8edef;
+}
+
+.community-color-swatch {
+  width: 22px;
+  height: 22px;
+  border: 1px solid rgba(17, 24, 39, 0.18);
+  border-radius: 5px;
+}
+
+.community-color-list strong,
+.community-color-list b {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.community-color-list small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.community-color-list b {
+  color: var(--teal-dark);
 }
 
 .community-section-title {
@@ -1818,5 +1878,9 @@ input[type="range"] {
 
   .community-detail-actions {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  }
+
+  .community-color-list {
+    grid-template-columns: 1fr;
   }
 }

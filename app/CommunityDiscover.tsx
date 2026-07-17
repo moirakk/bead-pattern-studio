@@ -5,6 +5,7 @@ import {
   COMMUNITY_SAMPLE_POSTS,
   countPreviewPatternColors,
   selectCommunityPosts,
+  summarizePreviewPatternColors,
   type CommunityPost,
   type CommunityPreviewPattern,
   type CommunityView,
@@ -81,6 +82,7 @@ export function CommunityDiscover({ previewProject, onClearPreview, onRemix }: C
   if (selectedPost) {
     const liked = reactions.liked.includes(selectedPost.id);
     const saved = reactions.saved.includes(selectedPost.id);
+    const colorUsage = summarizePreviewPatternColors(selectedPost.pattern);
     return (
       <div className="community-detail">
         <button type="button" className="community-back" onClick={() => { setSelectedPostId(null); setNotice(""); }} aria-label="返回社区作品列表">
@@ -127,6 +129,23 @@ export function CommunityDiscover({ previewProject, onClearPreview, onRemix }: C
             <div><dt>使用色卡</dt><dd>{selectedPost.paletteName}</dd></div>
             <div><dt>复刻说明</dt><dd>{selectedPost.remixLicense}</dd></div>
           </dl>
+        </section>
+
+        <section className="community-colors">
+          <div className="community-section-title">
+            <h3>色号清单</h3>
+            <small>{colorUsage.length} 色 · 按色号排序</small>
+          </div>
+          <div className="community-color-list">
+            {colorUsage.map((item) => (
+              <div key={item.code}>
+                <span className="community-color-swatch" style={{ background: item.hex }} />
+                <strong>{item.code}</strong>
+                <small>{item.name}</small>
+                <b>{item.count} 颗</b>
+              </div>
+            ))}
+          </div>
         </section>
 
         <section className="community-updates">

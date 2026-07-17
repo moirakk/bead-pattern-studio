@@ -45,6 +45,23 @@ const MARD_221_RAW = [
   ["M13", "#D19066"], ["M14", "#C77362"], ["M15", "#757D78"],
 ] as const;
 
+const MARD_291_EXTENSION_RAW = [
+  ["P1", "#FCF7F8"], ["P2", "#B0A9AC"], ["P3", "#AFDCAB"], ["P4", "#FEA49F"], ["P5", "#EE8C3E"], ["P6", "#5FD0A7"],
+  ["P7", "#EB9270"], ["P8", "#F0D958"], ["P9", "#D9D9D9"], ["P10", "#D9C7EA"], ["P11", "#F3ECC9"], ["P12", "#E6EEF2"],
+  ["P13", "#AACBEF"], ["P14", "#337680"], ["P15", "#668575"], ["P16", "#FEBF45"], ["P17", "#FEA324"], ["P18", "#FEB89F"],
+  ["P19", "#FFFEEC"], ["P20", "#FEBECF"], ["P21", "#ECBEBF"], ["P22", "#E4A89F"], ["P23", "#A56268"],
+  ["Q1", "#F2A5E8"], ["Q2", "#E9EC91"], ["Q3", "#FFFF00"], ["Q4", "#FFEBFA"], ["Q5", "#76CEDE"],
+  ["R1", "#D50D21"], ["R2", "#F92F83"], ["R3", "#FD8324"], ["R4", "#F8EC31"], ["R5", "#35C75B"], ["R6", "#238891"],
+  ["R7", "#19779D"], ["R8", "#1A60C3"], ["R9", "#9A56B4"], ["R10", "#FFDB4C"], ["R11", "#FFEBFA"], ["R12", "#D8D5CE"],
+  ["R13", "#55514C"], ["R14", "#9FE4DF"], ["R15", "#77CEE9"], ["R16", "#3ECFCA"], ["R17", "#4A867A"], ["R18", "#7FCD9D"],
+  ["R19", "#CDE55D"], ["R20", "#E8C7B4"], ["R21", "#AD6F3C"], ["R22", "#6C372F"], ["R23", "#FEB872"], ["R24", "#F3C1C0"],
+  ["R25", "#C9675E"], ["R26", "#D293BE"], ["R27", "#EA8CB1"], ["R28", "#9C87D6"],
+  ["T1", "#FFFFFF"],
+  ["Y1", "#FD6FB4"], ["Y2", "#FEB481"], ["Y3", "#D7FAA0"], ["Y4", "#8BDBFA"], ["Y5", "#E987EA"],
+  ["ZG1", "#DAABB3"], ["ZG2", "#D6AA87"], ["ZG3", "#C1BD8D"], ["ZG4", "#96869F"], ["ZG5", "#8490A6"],
+  ["ZG6", "#94BFE2"], ["ZG7", "#E2A9D2"], ["ZG8", "#AB91C0"],
+] as const;
+
 export function createBeadColor(code: string, name: string, hex: string): BeadColor {
   const normalizedHex = hex.startsWith("#") ? hex : `#${hex}`;
   const rgb = hexToRgb(normalizedHex);
@@ -59,6 +76,10 @@ export function createBeadColor(code: string, name: string, hex: string): BeadCo
 
 export function makeMard221Palette() {
   return MARD_221_RAW.map(([code, hex]) => createBeadColor(code, `MARD 221 ${code}`, hex));
+}
+
+export function makeMard291Palette() {
+  return [...MARD_221_RAW, ...MARD_291_EXTENSION_RAW].map(([code, hex]) => createBeadColor(code, `MARD 291 ${code}`, hex));
 }
 
 export function parsePaletteCsv(text: string) {

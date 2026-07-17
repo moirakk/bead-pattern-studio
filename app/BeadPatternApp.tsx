@@ -35,6 +35,7 @@ import {
   createPatternHistory,
   hexToRgb,
   makeMard221Palette,
+  makeMard291Palette,
   paintPatternCell,
   paintPatternArea,
   parsePaletteCsv,
@@ -63,6 +64,8 @@ type SelectionDraft = {
 
 const BUILTIN_MARD_221_NAME = "MARD 221 标准色卡";
 const BUILTIN_MARD_221_NOTE = "色卡：MARD 221 标准色卡（国内零售常见版本；HEX 为屏幕近似值，实物以豆子批次为准）";
+const BUILTIN_MARD_291_NAME = "MARD 291 全色色卡";
+const BUILTIN_MARD_291_NOTE = "色卡：MARD 291 全色色卡（含 P / Q / R / T / Y / ZG 扩展系列；HEX 为屏幕近似值，实物以豆子批次为准）";
 const MISSING_PALETTE_WARNING = "请选择内置色卡或导入店铺/品牌真实 CSV。";
 
 const A4_CANVAS = {
@@ -184,8 +187,8 @@ function drawCenteredCellCode(
 }
 
 export function BeadPatternApp() {
-  const [palette, setPalette] = useState<BeadColor[]>(makeMard221Palette);
-  const [paletteName, setPaletteName] = useState(BUILTIN_MARD_221_NAME);
+  const [palette, setPalette] = useState<BeadColor[]>(makeMard291Palette);
+  const [paletteName, setPaletteName] = useState(BUILTIN_MARD_291_NAME);
   const [paletteSourceKind, setPaletteSourceKind] = useState<PaletteSourceKind>("builtin");
   const [sourceImage, setSourceImage] = useState<HTMLImageElement | null>(null);
   const [imageName, setImageName] = useState("未上传图片");
@@ -230,7 +233,7 @@ export function BeadPatternApp() {
   const hasUsablePalette = palette.length > 0 && paletteSourceKind !== "missing";
   const paletteSourceText =
     paletteSourceKind === "builtin"
-      ? BUILTIN_MARD_221_NOTE
+      ? paletteName === BUILTIN_MARD_221_NAME ? BUILTIN_MARD_221_NOTE : BUILTIN_MARD_291_NOTE
       : paletteSourceKind === "imported"
         ? `色卡来源：${paletteName}（用户导入，请以店铺/品牌原始色卡为准）`
         : MISSING_PALETTE_WARNING;
@@ -490,6 +493,16 @@ export function BeadPatternApp() {
     setStatus("已切换到 MARD 221 标准色卡。");
   }
 
+  function useBuiltinMard291Palette() {
+    const nextPalette = makeMard291Palette();
+    setPalette(nextPalette);
+    setPaletteName(BUILTIN_MARD_291_NAME);
+    setPaletteSourceKind("builtin");
+    setSelectedCode("H7");
+    setColorLimit(Math.min(colorLimit, nextPalette.length));
+    setStatus("已切换到 MARD 291 全色色卡。新增 70 个扩展色号。");
+  }
+
   function makeSavedProjectThumbnail(targetPattern: Pattern) {
     const canvas = document.createElement("canvas");
     canvas.width = 180;
@@ -565,8 +578,8 @@ export function BeadPatternApp() {
     setSourceImage(null);
     setProjectTitle(project.title);
     setImageName(project.sourceName);
-    setPalette(projectHasUsablePalette ? project.palette : makeMard221Palette());
-    setPaletteName(projectHasUsablePalette ? project.settings.paletteName ?? BUILTIN_MARD_221_NAME : BUILTIN_MARD_221_NAME);
+    setPalette(projectHasUsablePalette ? project.palette : makeMard291Palette());
+    setPaletteName(projectHasUsablePalette ? project.settings.paletteName ?? BUILTIN_MARD_291_NAME : BUILTIN_MARD_291_NAME);
     setPaletteSourceKind(projectHasUsablePalette ? project.settings.paletteSourceKind ?? "builtin" : "builtin");
     setGridWidth(project.settings.gridWidth);
     setGridHeight(project.settings.gridHeight);
@@ -580,7 +593,7 @@ export function BeadPatternApp() {
     setIsSelecting(false);
     setPendingDeleteProjectId(null);
     setActiveMobilePanel("pattern");
-    setStatus(projectHasUsablePalette ? `已恢复作品「${project.title}」，可继续编辑或导出。` : "这个旧项目没有可验证色卡，已切换到 MARD 221，请重新上传图片生成。");
+    setStatus(projectHasUsablePalette ? `已恢复作品「${project.title}」，可继续编辑或导出。` : "这个旧项目没有可验证色卡，已切换到 MARD 291，请重新上传图片生成。");
   }
 
   function drawPaletteSourceNotice(ctx: CanvasRenderingContext2D, x: number, y: number, width: number) {
@@ -1326,7 +1339,7 @@ export function BeadPatternApp() {
           <p className="eyebrow">Fuse Beads Pattern Studio</p>
           <h1>任意图片转拼豆图纸</h1>
           <p className="hero-copy">
-            默认 MARD 221 色卡，可导入店铺 CSV；生成后可编辑、备豆并导出 PNG/PDF 图纸。
+            默认 MARD 291 全色色卡，可切换 221 常用版或导入店铺 CSV；生成后可编辑、备豆并导出 PNG/PDF 图纸。
           </p>
         </div>
         <div className="hero-meter">
@@ -1511,7 +1524,7 @@ export function BeadPatternApp() {
             ) : (
               <div className="pattern-empty">
                 <strong>{hasUsablePalette ? "上传图片开始生成" : "先选择色卡"}</strong>
-                <span>{hasUsablePalette ? "这里会显示可点击编辑的拼豆网格。" : "默认可使用 MARD 221，也可以导入店铺自己的 CSV。"}</span>
+                <span>{hasUsablePalette ? "这里会显示可点击编辑的拼豆网格。" : "默认可使用 MARD 291，也可以切换 221 或导入店铺自己的 CSV。"}</span>
               </div>
             )}
           </div>
@@ -1566,16 +1579,19 @@ export function BeadPatternApp() {
           <label className="file-drop compact-drop">
             <input type="file" accept=".csv,text/csv" onChange={handlePaletteUpload} />
             <strong>可选：导入店铺色卡 CSV</strong>
-            <small>默认使用 MARD 221；CSV 支持 code,name,hex 或 code,hex</small>
+            <small>默认使用 MARD 291 全色；CSV 支持 code,name,hex 或 code,hex</small>
           </label>
+          <div className="palette-preset-switch" role="group" aria-label="内置色卡选择">
+            <button type="button" className={paletteSourceKind === "builtin" && paletteName === BUILTIN_MARD_291_NAME ? "active" : ""} onClick={useBuiltinMard291Palette}>
+              291 全色
+            </button>
+            <button type="button" className={paletteSourceKind === "builtin" && paletteName === BUILTIN_MARD_221_NAME ? "active" : ""} onClick={useBuiltinMard221Palette}>
+              221 常用
+            </button>
+          </div>
           <div className={hasUsablePalette ? "palette-source" : "palette-source warning"}>
             <strong>{paletteName}</strong>
             <span>{paletteSourceText}</span>
-            {paletteSourceKind !== "builtin" && (
-              <button type="button" onClick={useBuiltinMard221Palette}>
-                使用 MARD 221
-              </button>
-            )}
           </div>
 
           <div className="palette-grid" aria-label="色号表">
