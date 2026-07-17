@@ -80,6 +80,78 @@ function csvEscape(value: string | number) {
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
+function formatCount(value: number) {
+  return value.toLocaleString("zh-CN");
+}
+
+function drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+}
+
+function fillRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+  fillStyle: string | CanvasGradient,
+) {
+  ctx.fillStyle = fillStyle;
+  drawRoundedRect(ctx, x, y, width, height, radius);
+  ctx.fill();
+}
+
+function strokeRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+  strokeStyle: string,
+) {
+  ctx.strokeStyle = strokeStyle;
+  drawRoundedRect(ctx, x, y, width, height, radius);
+  ctx.stroke();
+}
+
+function drawCard(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius = 18) {
+  ctx.save();
+  ctx.shadowColor = "rgba(15, 23, 42, 0.08)";
+  ctx.shadowBlur = 26;
+  ctx.shadowOffsetY = 12;
+  fillRoundedRect(ctx, x, y, width, height, radius, "#ffffff");
+  ctx.restore();
+  strokeRoundedRect(ctx, x, y, width, height, radius, "#dbe5ea");
+}
+
+function textColorForHex(hex: string) {
+  return colorDistance(rgbToLab(hexToRgb(hex)), rgbToLab({ r: 255, g: 255, b: 255 })) < 45 ? "#111827" : "#ffffff";
+}
+
+function drawFittedText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number) {
+  if (ctx.measureText(text).width <= maxWidth) {
+    ctx.fillText(text, x, y);
+    return;
+  }
+  let fitted = text;
+  while (fitted.length > 1 && ctx.measureText(`${fitted}...`).width > maxWidth) {
+    fitted = fitted.slice(0, -1);
+  }
+  ctx.fillText(`${fitted}...`, x, y);
+}
+
 export function BeadPatternApp() {
   const [palette, setPalette] = useState<BeadColor[]>(makeDemoPalette);
   const [sourceImage, setSourceImage] = useState<HTMLImageElement | null>(null);
@@ -457,42 +529,120 @@ export function BeadPatternApp() {
     canvas.height = A4_CANVAS.height;
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
-    ctx.fillStyle = "#fbfcff";
+    ctx.fillStyle = "#f7fafc";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     return { canvas, ctx };
   }
 
-  function drawA4Header(ctx: CanvasRenderingContext2D, title: string, subtitle: string, pageLabel: string) {
-    ctx.fillStyle = "#111827";
-    ctx.font = "700 32px Arial";
+  function drawA4Header(ctx: CanvasRenderingContext2D, title: string, subtitle: string, pageLabel: string, accent = "#146b70") {
+    const gradient = ctx.createLinearGradient(0, 0, A4_CANVAS.width, 132);
+    gradient.addColorStop(0, "#12343a");
+    gradient.addColorStop(0.56, accent);
+    gradient.addColorStop(1, "#ff6b4a");
+    fillRoundedRect(ctx, A4_CANVAS.margin, 44, A4_CANVAS.width - A4_CANVAS.margin * 2, 104, 22, gradient);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.78)";
+    ctx.font = "700 13px Arial, sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
-    ctx.fillText(title, A4_CANVAS.margin, 66);
-    ctx.font = "15px Arial";
-    ctx.fillStyle = "#5f6b7a";
-    ctx.fillText(subtitle, A4_CANVAS.margin, 94);
+    ctx.fillText("BEAD PATTERN STUDIO", A4_CANVAS.margin + 28, 84);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "700 31px Arial, PingFang SC, sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText(title, A4_CANVAS.margin + 28, 122);
+    ctx.font = "13px Arial, PingFang SC, sans-serif";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.82)";
+    drawFittedText(ctx, subtitle, A4_CANVAS.margin + 380, 122, 460);
     ctx.textAlign = "right";
-    ctx.fillText(pageLabel, A4_CANVAS.width - A4_CANVAS.margin, 94);
-    ctx.strokeStyle = "#d9e1e7";
-    ctx.beginPath();
-    ctx.moveTo(A4_CANVAS.margin, 118);
-    ctx.lineTo(A4_CANVAS.width - A4_CANVAS.margin, 118);
-    ctx.stroke();
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "700 14px Arial, PingFang SC, sans-serif";
+    ctx.fillText(pageLabel, A4_CANVAS.width - A4_CANVAS.margin - 28, 84);
   }
 
-  function drawPatternPreview(ctx: CanvasRenderingContext2D, startX: number, startY: number, maxSize: number) {
+  function drawPatternPreview(
+    ctx: CanvasRenderingContext2D,
+    startX: number,
+    startY: number,
+    maxWidth: number,
+    maxHeight: number,
+    showFrame = true,
+  ) {
     if (!pattern) return;
-    const previewCell = Math.max(2, Math.floor(maxSize / Math.max(pattern.width, pattern.height)));
+    const previewCell = Math.max(1, Math.floor(Math.min(maxWidth / pattern.width, maxHeight / pattern.height)));
     const previewW = pattern.width * previewCell;
     const previewH = pattern.height * previewCell;
+    const offsetX = startX + Math.floor((maxWidth - previewW) / 2);
+    const offsetY = startY + Math.floor((maxHeight - previewH) / 2);
     pattern.cells.forEach((cell, index) => {
       const x = index % pattern.width;
       const y = Math.floor(index / pattern.width);
       ctx.fillStyle = cell.hex;
-      ctx.fillRect(startX + x * previewCell, startY + y * previewCell, previewCell, previewCell);
+      ctx.fillRect(offsetX + x * previewCell, offsetY + y * previewCell, previewCell, previewCell);
     });
-    ctx.strokeStyle = "rgba(17, 24, 39, 0.35)";
-    ctx.strokeRect(startX, startY, previewW, previewH);
+    if (showFrame) {
+      ctx.strokeStyle = "rgba(17, 24, 39, 0.28)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(offsetX, offsetY, previewW, previewH);
+    }
+  }
+
+  function getA4GridLayout() {
+    const cellSize = 24;
+    const label = 42;
+    const header = 168;
+    const footer = 118;
+    const gridX = A4_CANVAS.margin + label;
+    const gridY = A4_CANVAS.margin + header + label;
+    const colsPerPage = Math.max(1, Math.floor((A4_CANVAS.width - A4_CANVAS.margin * 2 - label) / cellSize));
+    const rowsPerPage = Math.max(1, Math.floor((A4_CANVAS.height - A4_CANVAS.margin * 2 - header - footer - label) / cellSize));
+    return { cellSize, label, header, footer, gridX, gridY, colsPerPage, rowsPerPage };
+  }
+
+  function drawMetricCard(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, label: string, value: string, tint: string) {
+    fillRoundedRect(ctx, x, y, width, 112, 18, tint);
+    strokeRoundedRect(ctx, x, y, width, 112, 18, "rgba(17, 24, 39, 0.08)");
+    ctx.fillStyle = "#5f6b7a";
+    ctx.font = "700 13px Arial, PingFang SC, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(label, x + 22, y + 36);
+    ctx.fillStyle = "#111827";
+    ctx.font = "800 28px Arial, PingFang SC, sans-serif";
+    ctx.fillText(value, x + 22, y + 76);
+  }
+
+  function drawLegendItem(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, item: (typeof stats)[number]) {
+    fillRoundedRect(ctx, x, y, width, 44, 12, "#ffffff");
+    strokeRoundedRect(ctx, x, y, width, 44, 12, "#e3ebef");
+    ctx.fillStyle = item.color?.hex ?? "#111827";
+    fillRoundedRect(ctx, x + 12, y + 10, 24, 24, 6, ctx.fillStyle);
+    ctx.strokeStyle = "rgba(17, 24, 39, 0.2)";
+    ctx.strokeRect(x + 12, y + 10, 24, 24);
+    ctx.fillStyle = "#111827";
+    ctx.font = "700 12px Arial, PingFang SC, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(item.code, x + 46, y + 27);
+    ctx.fillStyle = "#5f6b7a";
+    ctx.font = "12px Arial, PingFang SC, sans-serif";
+    ctx.fillText(item.color?.name ?? "", x + 92, y + 27);
+    ctx.textAlign = "right";
+    ctx.fillStyle = "#146b70";
+    ctx.font = "700 12px Arial, PingFang SC, sans-serif";
+    ctx.fillText(`${formatCount(item.count)} 颗`, x + width - 14, y + 27);
+  }
+
+  function getTileStats(startCol: number, startRow: number, cols: number, rows: number) {
+    if (!pattern) return [];
+    const counts = new Map<string, number>();
+    for (let row = 0; row < rows; row += 1) {
+      for (let col = 0; col < cols; col += 1) {
+        const cell = pattern.cells[(startRow + row) * pattern.width + startCol + col];
+        counts.set(cell.code, (counts.get(cell.code) ?? 0) + 1);
+      }
+    }
+    const colorByCode = new Map(palette.map((color) => [color.code, color]));
+    return [...counts.entries()]
+      .map(([code, count]) => ({ code, count, color: colorByCode.get(code), percent: count / (cols * rows) }))
+      .sort((a, b) => b.count - a.count);
   }
 
   function makeA4SummaryPage() {
@@ -500,65 +650,84 @@ export function BeadPatternApp() {
     const page = makeA4Canvas();
     if (!page) return null;
     const { canvas, ctx } = page;
-    drawA4Header(ctx, "拼豆图纸", `${imageName} · ${pattern.width} x ${pattern.height} · ${pattern.cells.length} 颗`, "封面 / 图例");
+    const gridLayout = getA4GridLayout();
+    const totalGridPages =
+      Math.ceil(pattern.width / gridLayout.colsPerPage) * Math.ceil(pattern.height / gridLayout.rowsPerPage);
+    drawA4Header(ctx, "拼豆图纸", imageName, "封面 / 图例", "#1f9a94");
 
+    drawCard(ctx, 72, 184, 700, 860, 24);
     ctx.fillStyle = "#111827";
-    ctx.font = "700 20px Arial";
-    ctx.fillText("图纸概览", A4_CANVAS.margin, 170);
-    drawPatternPreview(ctx, A4_CANVAS.margin, 200, 460);
+    ctx.font = "800 24px Arial, PingFang SC, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("作品预览", 106, 232);
+    ctx.fillStyle = "#5f6b7a";
+    ctx.font = "13px Arial, PingFang SC, sans-serif";
+    ctx.fillText("用于确认整体配色与构图，后续分页为实际制作网格。", 106, 260);
+    fillRoundedRect(ctx, 106, 292, 632, 704, 18, "#f2f7f7");
+    drawPatternPreview(ctx, 136, 326, 572, 636);
 
-    const summaryX = 620;
-    ctx.font = "700 20px Arial";
+    drawCard(ctx, 806, 184, 362, 420, 24);
     ctx.fillStyle = "#111827";
-    ctx.fillText("制作信息", summaryX, 170);
-    ctx.font = "15px Arial";
-    ctx.fillStyle = "#344054";
+    ctx.font = "800 23px Arial, PingFang SC, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("制作信息", 838, 232);
+    drawMetricCard(ctx, 838, 270, 142, "尺寸", `${pattern.width} x ${pattern.height}`, "#eef8f6");
+    drawMetricCard(ctx, 994, 270, 142, "豆数", formatCount(pattern.cells.length), "#fff4ec");
+    drawMetricCard(ctx, 838, 404, 142, "色号", `${stats.length} 色`, "#f4f1ff");
+    drawMetricCard(ctx, 994, 404, 142, "页数", `${totalGridPages + 1} 页`, "#fff9de");
+
+    drawCard(ctx, 806, 638, 362, 406, 24);
+    ctx.fillStyle = "#111827";
+    ctx.font = "800 23px Arial, PingFang SC, sans-serif";
+    ctx.fillText("打印说明", 838, 688);
+    ctx.fillStyle = "#445464";
+    ctx.font = "15px Arial, PingFang SC, sans-serif";
     [
-      `成品格数：${pattern.width} x ${pattern.height}`,
-      `总豆数：${pattern.cells.length.toLocaleString("zh-CN")} 颗`,
-      `使用色号：${stats.length} 色`,
-      `导出格式：A4 分页 PDF`,
+      "1. 按 A4 纵向打印。",
+      "2. 分页网格按列号和行号对齐。",
+      "3. 每格内的文字为色号简码。",
+      "4. 图例统计用于备豆和补货。",
+      "5. 建议先打印封面核对配色。",
     ].forEach((line, index) => {
-      ctx.fillText(line, summaryX, 210 + index * 34);
+      ctx.fillText(line, 838, 734 + index * 42);
     });
 
-    ctx.font = "700 20px Arial";
+    drawCard(ctx, 72, 1096, 1096, 500, 24);
     ctx.fillStyle = "#111827";
-    ctx.fillText("色号图例 / 用量", A4_CANVAS.margin, 720);
+    ctx.font = "800 24px Arial, PingFang SC, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("色号图例 / 用量", 106, 1148);
+    ctx.fillStyle = "#5f6b7a";
+    ctx.font = "13px Arial, PingFang SC, sans-serif";
+    ctx.fillText("按使用量排序，便于购买和核对库存。", 106, 1174);
     const columns = 2;
-    const rowHeight = 34;
-    const columnWidth = 520;
+    const rowHeight = 54;
+    const columnWidth = 510;
     stats.forEach((item, index) => {
       const column = index % columns;
       const row = Math.floor(index / columns);
-      const x = A4_CANVAS.margin + column * columnWidth;
-      const y = 765 + row * rowHeight;
-      ctx.fillStyle = item.color?.hex ?? "#111827";
-      ctx.fillRect(x, y - 18, 24, 24);
-      ctx.strokeStyle = "rgba(17, 24, 39, 0.35)";
-      ctx.strokeRect(x, y - 18, 24, 24);
-      ctx.fillStyle = "#111827";
-      ctx.font = "13px Arial";
-      ctx.fillText(`${item.code}  ${item.color?.name ?? ""}`, x + 36, y);
-      ctx.textAlign = "right";
-      ctx.fillText(`${item.count} 颗`, x + columnWidth - 36, y);
-      ctx.textAlign = "left";
+      const x = 106 + column * columnWidth;
+      const y = 1210 + row * rowHeight;
+      if (y < 1542) drawLegendItem(ctx, x, y, 480, item);
     });
+    if (stats.length > 12) {
+      ctx.fillStyle = "#81909d";
+      ctx.font = "12px Arial, PingFang SC, sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText(`另有 ${stats.length - 12} 个色号，请查看 CSV 明细。`, 1132, 1564);
+    }
 
+    ctx.fillStyle = "#81909d";
+    ctx.font = "12px Arial, PingFang SC, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("Generated by Bead Pattern Studio", A4_CANVAS.width / 2, 1654);
     return canvas;
   }
 
   function makeA4GridPages() {
     if (!pattern) return [];
     const pages: HTMLCanvasElement[] = [];
-    const cellSize = 24;
-    const label = 42;
-    const header = 120;
-    const footer = 44;
-    const gridX = A4_CANVAS.margin + label;
-    const gridY = A4_CANVAS.margin + header + label;
-    const colsPerPage = Math.max(1, Math.floor((A4_CANVAS.width - A4_CANVAS.margin * 2 - label) / cellSize));
-    const rowsPerPage = Math.max(1, Math.floor((A4_CANVAS.height - A4_CANVAS.margin * 2 - header - footer - label) / cellSize));
+    const { cellSize, gridX, gridY, colsPerPage, rowsPerPage } = getA4GridLayout();
     const xPages = Math.ceil(pattern.width / colsPerPage);
     const yPages = Math.ceil(pattern.height / rowsPerPage);
     const totalPages = xPages * yPages;
@@ -577,17 +746,26 @@ export function BeadPatternApp() {
         drawA4Header(
           ctx,
           "拼豆分页图纸",
-          `列 ${startCol + 1}-${startCol + cols} · 行 ${startRow + 1}-${startRow + rows}`,
+          `${imageName} / 列 ${startCol + 1}-${startCol + cols} / 行 ${startRow + 1}-${startRow + rows}`,
           `网格 ${pageNumber} / ${totalPages}`,
+          "#146b70",
         );
 
-        ctx.font = "10px Arial";
+        const gridCardX = A4_CANVAS.margin;
+        const gridCardY = 196;
+        const gridCardW = A4_CANVAS.width - A4_CANVAS.margin * 2;
+        const gridCardH = rows * cellSize + 92;
+        drawCard(ctx, gridCardX, gridCardY, gridCardW, gridCardH, 22);
+        fillRoundedRect(ctx, gridX - 8, gridY - 38, cols * cellSize + 16, 30, 10, "#eef5f4");
+
+        ctx.font = "10px Arial, PingFang SC, sans-serif";
         ctx.fillStyle = "#344054";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         for (let col = 0; col < cols; col += 1) {
           ctx.fillText(String(startCol + col + 1), gridX + col * cellSize + cellSize / 2, gridY - 22);
         }
+        fillRoundedRect(ctx, gridX - 40, gridY - 8, 30, rows * cellSize + 16, 10, "#eef5f4");
         ctx.textAlign = "right";
         for (let row = 0; row < rows; row += 1) {
           ctx.fillText(String(startRow + row + 1), gridX - 10, gridY + row * cellSize + cellSize / 2);
@@ -600,8 +778,8 @@ export function BeadPatternApp() {
             const y = gridY + row * cellSize;
             ctx.fillStyle = cell.hex;
             ctx.fillRect(x, y, cellSize, cellSize);
-            ctx.fillStyle = colorDistance(rgbToLab(hexToRgb(cell.hex)), rgbToLab({ r: 255, g: 255, b: 255 })) < 45 ? "#111827" : "#ffffff";
-            ctx.font = "8px Arial";
+            ctx.fillStyle = textColorForHex(cell.hex);
+            ctx.font = "700 8px Arial, sans-serif";
             ctx.textAlign = "center";
             ctx.fillText(cell.code.replace(/^[A-Z]+/, ""), x + cellSize / 2, y + cellSize / 2 + 1);
           }
@@ -622,10 +800,29 @@ export function BeadPatternApp() {
           ctx.stroke();
         }
 
+        const tileStats = getTileStats(startCol, startRow, cols, rows).slice(0, 8);
+        const legendY = Math.min(gridY + rows * cellSize + 48, A4_CANVAS.height - 170);
+        ctx.textAlign = "left";
+        ctx.fillStyle = "#111827";
+        ctx.font = "800 15px Arial, PingFang SC, sans-serif";
+        ctx.fillText("本页主要色号", A4_CANVAS.margin, legendY);
+        tileStats.forEach((item, index) => {
+          const x = A4_CANVAS.margin + 128 + index * 120;
+          ctx.fillStyle = item.color?.hex ?? "#111827";
+          fillRoundedRect(ctx, x, legendY - 18, 22, 22, 5, ctx.fillStyle);
+          ctx.strokeStyle = "rgba(17, 24, 39, 0.2)";
+          ctx.strokeRect(x, legendY - 18, 22, 22);
+          ctx.fillStyle = "#344054";
+          ctx.font = "700 11px Arial, PingFang SC, sans-serif";
+          ctx.fillText(item.code, x + 30, legendY);
+        });
+
         ctx.textAlign = "left";
         ctx.fillStyle = "#5f6b7a";
-        ctx.font = "12px Arial";
-        ctx.fillText(`${imageName} · ${pattern.width} x ${pattern.height}`, A4_CANVAS.margin, A4_CANVAS.height - 52);
+        ctx.font = "12px Arial, PingFang SC, sans-serif";
+        ctx.fillText(`${pattern.width} x ${pattern.height} / ${formatCount(pattern.cells.length)} 颗`, A4_CANVAS.margin, A4_CANVAS.height - 58);
+        ctx.textAlign = "right";
+        ctx.fillText("Bead Pattern Studio", A4_CANVAS.width - A4_CANVAS.margin, A4_CANVAS.height - 58);
         pages.push(canvas);
       }
     }
