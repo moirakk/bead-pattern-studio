@@ -21,6 +21,7 @@ import {
   undoPattern,
   type BeadColor,
   type DitherMode,
+  type Pattern,
   type PatternHistory,
   type RGB,
 } from "@/lib/pattern";
@@ -39,6 +40,24 @@ type SelectionDraft = {
   startY: number;
   endX: number;
   endY: number;
+};
+
+type SavedProject = {
+  id: string;
+  title: string;
+  sourceName: string;
+  savedAt: string;
+  pattern: Pattern;
+  palette: BeadColor[];
+  settings: {
+    gridWidth: number;
+    gridHeight: number;
+    colorLimit: number;
+    ditherMode: DitherMode;
+    crop: Crop;
+    selectedCode: string;
+  };
+  thumbnail: string;
 };
 
 const TECH_CARDS = [
@@ -66,6 +85,9 @@ const A4_CANVAS = {
   margin: 72,
 };
 
+const SAVED_PROJECTS_KEY = "bead-pattern-studio.saved-projects.v1";
+const MAX_SAVED_PROJECTS = 12;
+
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -87,6 +109,19 @@ function stripFileExtension(filename: string) {
 function makeSafeFilename(value: string) {
   const trimmed = value.trim() || "bead-pattern";
   return trimmed.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "-").slice(0, 80);
+}
+
+function readSavedProjects() {
+  try {
+    const raw = window.localStorage.getItem(SAVED_PROJECTS_KEY);
+    return raw ? (JSON.parse(raw) as SavedProject[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeSavedProjects(projects: SavedProject[]) {
+  window.localStorage.setItem(SAVED_PROJECTS_KEY, JSON.stringify(projects));
 }
 
 function formatCount(value: number) {
@@ -178,6 +213,9 @@ export function BeadPatternApp() {
   const [editMode, setEditMode] = useState<EditMode>("paint");
   const [selection, setSelection] = useState<SelectionDraft | null>(null);
   const [isSelecting, setIsSelecting] = useState(false);
+  const [savedProjects, setSavedProjects] = useState<SavedProject[]>(() =>
+    typeof window === "undefined" ? [] : readSavedProjects(),
+  );
   const [status, setStatus] = useState("上传图片后会自动生成图纸。");
   const sourcePreviewRef = useRef<HTMLCanvasElement | null>(null);
   const workCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -247,7 +285,12 @@ export function BeadPatternApp() {
 
   useEffect(() => {
     const canvas = sourcePreviewRef.current;
-    if (!canvas || !sourceImage) return;
+    if (!canvas) return;
+    if (!sourceImage) {
+      const ctx = canvas.getContext("2d");
+      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const maxWidth = 520;
@@ -379,6 +422,86 @@ export function BeadPatternApp() {
         setStatus("色卡 CSV 未识别：请使用 code,name,hex 或 code,hex。");
       }
     });
+  }
+
+  function makeSavedProjectThumbnail(targetPattern: Pattern) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 180;
+    canvas.height = 132;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return "";
+    ctx.fillStyle = "#f7fafc";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const cellSize = Math.max(1, Math.floor(Math.min(148 / targetPattern.width, 100 / targetPattern.height)));
+    const previewW = targetPattern.width * cellSize;
+    const previewH = targetPattern.height * cellSize;
+    const startX = Math.floor((canvas.width - previewW) / 2);
+    const startY = Math.floor((canvas.height - previewH) / 2);
+    targetPattern.cells.forEach((cell, index) => {
+      const x = index % targetPattern.width;
+      const y = Math.floor(index / targetPattern.width);
+      ctx.fillStyle = cell.hex;
+      ctx.fillRect(startX + x * cellSize, startY + y * cellSize, cellSize, cellSize);
+    });
+    ctx.strokeStyle = "rgba(17, 24, 39, 0.22)";
+    ctx.strokeRect(startX, startY, previewW, previewH);
+    return canvas.toDataURL("image/jpeg", 0.82);
+  }
+
+  function saveCurrentProject() {
+    if (!pattern) {
+      setStatus("请先生成图纸，再保存作品。");
+      return;
+    }
+    const title = exportTitle;
+    const now = new Date().toISOString();
+    const savedProject: SavedProject = {
+      id: makeSafeFilename(title).toLowerCase() || `project-${Date.now()}`,
+      title,
+      sourceName: imageName,
+      savedAt: now,
+      pattern,
+      palette,
+      settings: {
+        gridWidth,
+        gridHeight,
+        colorLimit,
+        ditherMode,
+        crop,
+        selectedCode,
+      },
+      thumbnail: makeSavedProjectThumbnail(pattern),
+    };
+    const existing = readSavedProjects().filter((project) => project.id !== savedProject.id);
+    const nextProjects = [savedProject, ...existing].slice(0, MAX_SAVED_PROJECTS);
+    writeSavedProjects(nextProjects);
+    setSavedProjects(nextProjects);
+    setStatus(`已保存作品「${title}」。`);
+  }
+
+  function restoreProject(project: SavedProject) {
+    setSourceImage(null);
+    setProjectTitle(project.title);
+    setImageName(project.sourceName);
+    setPalette(project.palette);
+    setGridWidth(project.settings.gridWidth);
+    setGridHeight(project.settings.gridHeight);
+    setColorLimit(project.settings.colorLimit);
+    setDitherMode(project.settings.ditherMode);
+    setCrop(project.settings.crop);
+    setSelectedCode(project.settings.selectedCode);
+    setPatternHistory((current) => resetPatternHistory(current, project.pattern));
+    setActiveCell(null);
+    setSelection(null);
+    setIsSelecting(false);
+    setStatus(`已恢复作品「${project.title}」，可继续编辑或导出。`);
+  }
+
+  function deleteSavedProject(projectId: string) {
+    const nextProjects = savedProjects.filter((project) => project.id !== projectId);
+    writeSavedProjects(nextProjects);
+    setSavedProjects(nextProjects);
+    setStatus("已删除本地保存的作品。");
   }
 
   function paintCell(index: number) {
@@ -1018,6 +1141,7 @@ export function BeadPatternApp() {
               <p>{status}</p>
             </div>
             <div className="export-actions">
+              <button type="button" onClick={saveCurrentProject} disabled={!pattern}>保存</button>
               <button type="button" onClick={exportPng} disabled={!pattern}>PNG</button>
               <button type="button" onClick={exportPdf} disabled={!pattern}>PDF</button>
               <button type="button" onClick={exportCsv} disabled={!pattern}>CSV</button>
@@ -1118,6 +1242,38 @@ export function BeadPatternApp() {
               ))
             ) : (
               <p className="muted">生成图纸后会统计每个色号的用量。</p>
+            )}
+          </div>
+
+          <div className="panel-title compact">
+            <span>4</span>
+            <h2>本地作品</h2>
+          </div>
+          <div className="saved-projects" aria-label="本地保存作品">
+            {savedProjects.length ? (
+              savedProjects.map((project) => (
+                <article className="saved-project" key={project.id}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {project.thumbnail ? <img src={project.thumbnail} alt="" /> : <div className="saved-thumb-placeholder" />}
+                  <div>
+                    <strong>{project.title}</strong>
+                    <small>
+                      {project.pattern.width} x {project.pattern.height} · {formatCount(project.pattern.cells.length)} 颗
+                    </small>
+                    <small>{new Date(project.savedAt).toLocaleString("zh-CN", { dateStyle: "short", timeStyle: "short" })}</small>
+                  </div>
+                  <div className="saved-project-actions">
+                    <button type="button" onClick={() => restoreProject(project)}>
+                      恢复
+                    </button>
+                    <button type="button" onClick={() => deleteSavedProject(project.id)}>
+                      删除
+                    </button>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <p className="muted">保存后的作品会出现在这里，刷新页面也能恢复。</p>
             )}
           </div>
         </aside>
