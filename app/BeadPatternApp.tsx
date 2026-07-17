@@ -579,86 +579,69 @@ export function BeadPatternApp() {
 
   function makeExportCanvas() {
     if (!pattern) return null;
-    const legend = summarizePattern(pattern, palette);
-    const margin = 72;
-    const label = 34;
-    const cellSize = Math.max(10, Math.min(28, Math.floor(1200 / Math.max(pattern.width, pattern.height))));
-    const gridW = pattern.width * cellSize;
-    const gridH = pattern.height * cellSize;
-    const legendW = 340;
     const canvas = document.createElement("canvas");
-    canvas.width = margin + label + gridW + legendW + margin;
-    canvas.height = Math.max(margin * 2 + label + gridH, 420 + legend.length * 28);
+    canvas.width = 1080;
+    canvas.height = 1440;
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
 
-    ctx.fillStyle = "#fbfcff";
+    const background = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    background.addColorStop(0, "#eef8f6");
+    background.addColorStop(0.52, "#fff9ef");
+    background.addColorStop(1, "#f7fafc");
+    ctx.fillStyle = background;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#111827";
-    ctx.font = "700 30px Arial";
-    ctx.fillText(exportTitle, margin, 44);
-    ctx.font = "16px Arial";
-    ctx.fillText(`${pattern.width} x ${pattern.height} · ${pattern.cells.length} 颗 · 源图 ${imageName}`, margin, 72);
 
-    const startX = margin + label;
-    const startY = margin + label + 18;
-    ctx.font = "12px Arial";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    for (let x = 0; x < pattern.width; x += 1) {
-      if (x % 5 === 0 || cellSize >= 18) ctx.fillText(String(x + 1), startX + x * cellSize + cellSize / 2, startY - 18);
-    }
-    ctx.textAlign = "right";
-    for (let y = 0; y < pattern.height; y += 1) {
-      if (y % 5 === 0 || cellSize >= 18) ctx.fillText(String(y + 1), startX - 10, startY + y * cellSize + cellSize / 2);
-    }
-
-    pattern.cells.forEach((cell, index) => {
-      const x = index % pattern.width;
-      const y = Math.floor(index / pattern.width);
-      ctx.fillStyle = cell.hex;
-      ctx.fillRect(startX + x * cellSize, startY + y * cellSize, cellSize, cellSize);
-      if (cellSize >= 18) {
-        ctx.fillStyle = colorDistance(rgbToLab(hexToRgb(cell.hex)), rgbToLab({ r: 255, g: 255, b: 255 })) < 45 ? "#111827" : "#ffffff";
-        ctx.font = "9px Arial";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(cell.code.replace(/^[A-Z]+/, ""), startX + x * cellSize + cellSize / 2, startY + y * cellSize + cellSize / 2);
-      }
-    });
-
-    ctx.strokeStyle = "rgba(17, 24, 39, 0.28)";
-    ctx.lineWidth = 1;
-    for (let x = 0; x <= pattern.width; x += 1) {
-      ctx.beginPath();
-      ctx.moveTo(startX + x * cellSize + 0.5, startY);
-      ctx.lineTo(startX + x * cellSize + 0.5, startY + gridH);
-      ctx.stroke();
-    }
-    for (let y = 0; y <= pattern.height; y += 1) {
-      ctx.beginPath();
-      ctx.moveTo(startX, startY + y * cellSize + 0.5);
-      ctx.lineTo(startX + gridW, startY + y * cellSize + 0.5);
-      ctx.stroke();
-    }
-
-    const legendX = startX + gridW + 52;
+    fillRoundedRect(ctx, 54, 54, 972, 132, 30, "#12343a");
+    ctx.fillStyle = "rgba(255, 255, 255, 0.74)";
+    ctx.font = "700 18px Arial, sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
+    ctx.fillText("BEAD PATTERN STUDIO", 94, 105);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "800 42px Arial, PingFang SC, sans-serif";
+    drawFittedText(ctx, exportTitle, 94, 154, 780);
+
+    drawCard(ctx, 54, 226, 972, 790, 34);
     ctx.fillStyle = "#111827";
-    ctx.font = "700 22px Arial";
-    ctx.fillText("色号图例 / 用量", legendX, startY);
-    ctx.font = "13px Arial";
-    legend.forEach((item, index) => {
-      const y = startY + 34 + index * 28;
+    ctx.font = "800 26px Arial, PingFang SC, sans-serif";
+    ctx.fillText("作品预览", 98, 282);
+    ctx.fillStyle = "#5f6b7a";
+    ctx.font = "16px Arial, PingFang SC, sans-serif";
+    ctx.fillText("适合社群分享、下单确认和作品集封面。", 98, 314);
+    fillRoundedRect(ctx, 98, 352, 884, 600, 26, "#f2f7f7");
+    drawPatternPreview(ctx, 128, 386, 824, 532);
+
+    const metricY = 1058;
+    drawMetricCard(ctx, 74, metricY, 210, "尺寸", `${pattern.width} x ${pattern.height}`, "#eef8f6");
+    drawMetricCard(ctx, 306, metricY, 210, "总豆数", formatCount(pattern.cells.length), "#fff4ec");
+    drawMetricCard(ctx, 538, metricY, 210, "色号", `${stats.length} 色`, "#f4f1ff");
+    drawMetricCard(ctx, 770, metricY, 210, "格式", "PNG / PDF", "#fff9de");
+
+    drawCard(ctx, 54, 1210, 972, 150, 28);
+    ctx.fillStyle = "#111827";
+    ctx.font = "800 20px Arial, PingFang SC, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("主要色号", 94, 1264);
+    stats.slice(0, 6).forEach((item, index) => {
+      const x = 94 + index * 148;
+      const y = 1300;
       ctx.fillStyle = item.color?.hex ?? "#111827";
-      ctx.fillRect(legendX, y - 14, 22, 22);
-      ctx.strokeStyle = "rgba(17, 24, 39, 0.35)";
-      ctx.strokeRect(legendX, y - 14, 22, 22);
+      fillRoundedRect(ctx, x, y, 34, 34, 8, ctx.fillStyle);
+      ctx.strokeStyle = "rgba(17, 24, 39, 0.2)";
+      ctx.strokeRect(x, y, 34, 34);
       ctx.fillStyle = "#111827";
-      ctx.fillText(`${item.code}  ${item.color?.name ?? ""}`, legendX + 34, y + 2);
-      ctx.fillText(`${item.count} 颗`, legendX + 226, y + 2);
+      ctx.font = "800 13px Arial, PingFang SC, sans-serif";
+      ctx.fillText(item.code, x + 44, y + 14);
+      ctx.fillStyle = "#5f6b7a";
+      ctx.font = "12px Arial, PingFang SC, sans-serif";
+      ctx.fillText(`${formatCount(item.count)} 颗`, x + 44, y + 32);
     });
+
+    ctx.fillStyle = "#81909d";
+    ctx.font = "14px Arial, PingFang SC, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("Generated by Bead Pattern Studio", canvas.width / 2, 1400);
     return canvas;
   }
 
@@ -972,7 +955,7 @@ export function BeadPatternApp() {
     const canvas = makeExportCanvas();
     if (!canvas) return;
     canvas.toBlob((blob) => {
-      if (blob) downloadBlob(blob, `${exportFilename}.png`);
+      if (blob) downloadBlob(blob, `${exportFilename}-poster.png`);
     }, "image/png");
   }
 
@@ -1142,7 +1125,7 @@ export function BeadPatternApp() {
             </div>
             <div className="export-actions">
               <button type="button" onClick={saveCurrentProject} disabled={!pattern}>保存</button>
-              <button type="button" onClick={exportPng} disabled={!pattern}>PNG</button>
+              <button type="button" onClick={exportPng} disabled={!pattern}>海报</button>
               <button type="button" onClick={exportPdf} disabled={!pattern}>PDF</button>
               <button type="button" onClick={exportCsv} disabled={!pattern}>CSV</button>
             </div>
