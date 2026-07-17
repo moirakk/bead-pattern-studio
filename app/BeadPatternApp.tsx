@@ -68,25 +68,6 @@ const BUILTIN_MARD_221_NAME = "MARD 221 标准色卡";
 const BUILTIN_MARD_221_NOTE = "色卡：MARD 221 标准色卡（国内零售常见版本；HEX 为屏幕近似值，实物以豆子批次为准）";
 const MISSING_PALETTE_WARNING = "请选择内置色卡或导入店铺/品牌真实 CSV。";
 
-const TECH_CARDS = [
-  {
-    title: "技术方案",
-    body: "浏览器端 Canvas 处理图片；核心转换逻辑独立于 UI；色卡用 CSV/JSON 数据源替换；导出端统一从 Pattern 数据生成 PNG/PDF 图纸。",
-  },
-  {
-    title: "数据结构",
-    body: "PaletteColor(code/name/hex/rgb/lab)、Pattern(width/height/cells)、Cell(code/hex/source)、Settings(crop/size/colorLimit)。",
-  },
-  {
-    title: "算法设计",
-    body: "裁剪后缩放到豆阵尺寸，读取每格平均 RGB，转 Lab 空间计算色差；支持 Top N 色号限制和柔和/强化抖动。",
-  },
-  {
-    title: "可扩展架构",
-    body: "后续可把转换函数放入 Web Worker；色卡接店铺后台；项目保存到 IndexedDB/云端；同一核心模块可移植到小程序或 App。",
-  },
-];
-
 const A4_CANVAS = {
   width: 1240,
   height: 1754,
@@ -1170,7 +1151,7 @@ export function BeadPatternApp() {
           <p className="eyebrow">Fuse Beads Pattern Studio</p>
           <h1>任意图片转拼豆图纸</h1>
           <p className="hero-copy">
-            上传图片，限定成品尺寸和豆子数量，按店铺色号表自动匹配最近色，再手工微调用量和单格色号。
+            默认 MARD 221 色卡，可导入店铺 CSV；生成后可编辑、备豆并导出 PNG/PDF 图纸。
           </p>
         </div>
         <div className="hero-meter">
@@ -1180,15 +1161,6 @@ export function BeadPatternApp() {
           <small>预计豆数</small>
         </div>
       </header>
-
-      <section className="blueprint" aria-label="产品方案">
-        {TECH_CARDS.map((card) => (
-          <article key={card.title}>
-            <h2>{card.title}</h2>
-            <p>{card.body}</p>
-          </article>
-        ))}
-      </section>
 
       <section className="workspace" aria-label="拼豆图纸工具">
         <aside className="panel controls">
