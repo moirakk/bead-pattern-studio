@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { makePdfFromJpegPages } from "../lib/export/pdf";
 import {
   buildPattern,
   canRedoPattern,
@@ -124,4 +125,18 @@ bad,not-a-color`);
   assert.equal(parsed[0].name, "Snow");
   assert.equal(parsed[1].code, "A02");
   assert.equal(parsed[1].name, "A02");
+});
+
+test("builds a multi-page PDF from JPEG page images", async () => {
+  const tinyJpeg = `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString("base64")}`;
+  const pdf = makePdfFromJpegPages([
+    { dataUrl: tinyJpeg, imageWidth: 1, imageHeight: 1 },
+    { dataUrl: tinyJpeg, imageWidth: 1, imageHeight: 1 },
+  ]);
+
+  assert.equal(pdf.type, "application/pdf");
+  const text = await pdf.text();
+  assert.match(text, /^%PDF-1\.3/);
+  assert.match(text, /\/Count 2/);
+  assert.match(text, /\/Subtype \/Image/);
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, MouseEvent, useEffect, useMemo, useRef, useState } from "react";
+import { makePdfFromJpegPages } from "@/lib/export/pdf";
 import {
   buildPattern,
   canRedoPattern,
@@ -48,6 +49,12 @@ const TECH_CARDS = [
   },
 ];
 
+const A4_CANVAS = {
+  width: 1240,
+  height: 1754,
+  margin: 72,
+};
+
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -60,78 +67,6 @@ function downloadBlob(blob: Blob, filename: string) {
 function csvEscape(value: string | number) {
   const text = String(value);
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-}
-
-function base64ToBytes(dataUrl: string) {
-  const base64 = dataUrl.split(",")[1] ?? "";
-  const binary = window.atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
-
-function makePdfFromJpeg(jpegDataUrl: string, imageWidth: number, imageHeight: number) {
-  const imageBytes = base64ToBytes(jpegDataUrl);
-  const encoder = new TextEncoder();
-  const chunks: Uint8Array[] = [];
-  const offsets: number[] = [];
-  let length = 0;
-
-  const pushString = (value: string) => {
-    const bytes = encoder.encode(value);
-    chunks.push(bytes);
-    length += bytes.length;
-  };
-  const pushBytes = (bytes: Uint8Array) => {
-    chunks.push(bytes);
-    length += bytes.length;
-  };
-  const object = (id: number, body: () => void) => {
-    offsets[id] = length;
-    pushString(`${id} 0 obj\n`);
-    body();
-    pushString("\nendobj\n");
-  };
-
-  const pageWidth = Math.min(1440, imageWidth * 0.75);
-  const pageHeight = pageWidth * (imageHeight / imageWidth);
-  const content = `q\n${pageWidth.toFixed(2)} 0 0 ${pageHeight.toFixed(2)} 0 0 cm\n/Im0 Do\nQ`;
-
-  pushString("%PDF-1.3\n");
-  object(1, () => pushString("<< /Type /Catalog /Pages 2 0 R >>"));
-  object(2, () => pushString("<< /Type /Pages /Kids [3 0 R] /Count 1 >>"));
-  object(3, () =>
-    pushString(
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth.toFixed(2)} ${pageHeight.toFixed(
-        2,
-      )}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>`,
-    ),
-  );
-  object(4, () => {
-    pushString(
-      `<< /Type /XObject /Subtype /Image /Width ${imageWidth} /Height ${imageHeight} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageBytes.length} >>\nstream\n`,
-    );
-    pushBytes(imageBytes);
-    pushString("\nendstream");
-  });
-  object(5, () => pushString(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`));
-  const xrefOffset = length;
-  pushString("xref\n0 6\n0000000000 65535 f \n");
-  for (let id = 1; id <= 5; id += 1) {
-    pushString(`${String(offsets[id]).padStart(10, "0")} 00000 n \n`);
-  }
-  pushString(`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`);
-
-  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-  const pdf = new Uint8Array(total);
-  let cursor = 0;
-  for (const chunk of chunks) {
-    pdf.set(chunk, cursor);
-    cursor += chunk.length;
-  }
-  return new Blob([pdf], { type: "application/pdf" });
 }
 
 export function BeadPatternApp() {
@@ -435,6 +370,187 @@ export function BeadPatternApp() {
     return canvas;
   }
 
+  function makeA4Canvas() {
+    const canvas = document.createElement("canvas");
+    canvas.width = A4_CANVAS.width;
+    canvas.height = A4_CANVAS.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.fillStyle = "#fbfcff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    return { canvas, ctx };
+  }
+
+  function drawA4Header(ctx: CanvasRenderingContext2D, title: string, subtitle: string, pageLabel: string) {
+    ctx.fillStyle = "#111827";
+    ctx.font = "700 32px Arial";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText(title, A4_CANVAS.margin, 66);
+    ctx.font = "15px Arial";
+    ctx.fillStyle = "#5f6b7a";
+    ctx.fillText(subtitle, A4_CANVAS.margin, 94);
+    ctx.textAlign = "right";
+    ctx.fillText(pageLabel, A4_CANVAS.width - A4_CANVAS.margin, 94);
+    ctx.strokeStyle = "#d9e1e7";
+    ctx.beginPath();
+    ctx.moveTo(A4_CANVAS.margin, 118);
+    ctx.lineTo(A4_CANVAS.width - A4_CANVAS.margin, 118);
+    ctx.stroke();
+  }
+
+  function drawPatternPreview(ctx: CanvasRenderingContext2D, startX: number, startY: number, maxSize: number) {
+    if (!pattern) return;
+    const previewCell = Math.max(2, Math.floor(maxSize / Math.max(pattern.width, pattern.height)));
+    const previewW = pattern.width * previewCell;
+    const previewH = pattern.height * previewCell;
+    pattern.cells.forEach((cell, index) => {
+      const x = index % pattern.width;
+      const y = Math.floor(index / pattern.width);
+      ctx.fillStyle = cell.hex;
+      ctx.fillRect(startX + x * previewCell, startY + y * previewCell, previewCell, previewCell);
+    });
+    ctx.strokeStyle = "rgba(17, 24, 39, 0.35)";
+    ctx.strokeRect(startX, startY, previewW, previewH);
+  }
+
+  function makeA4SummaryPage() {
+    if (!pattern) return null;
+    const page = makeA4Canvas();
+    if (!page) return null;
+    const { canvas, ctx } = page;
+    drawA4Header(ctx, "拼豆图纸", `${imageName} · ${pattern.width} x ${pattern.height} · ${pattern.cells.length} 颗`, "封面 / 图例");
+
+    ctx.fillStyle = "#111827";
+    ctx.font = "700 20px Arial";
+    ctx.fillText("图纸概览", A4_CANVAS.margin, 170);
+    drawPatternPreview(ctx, A4_CANVAS.margin, 200, 460);
+
+    const summaryX = 620;
+    ctx.font = "700 20px Arial";
+    ctx.fillStyle = "#111827";
+    ctx.fillText("制作信息", summaryX, 170);
+    ctx.font = "15px Arial";
+    ctx.fillStyle = "#344054";
+    [
+      `成品格数：${pattern.width} x ${pattern.height}`,
+      `总豆数：${pattern.cells.length.toLocaleString("zh-CN")} 颗`,
+      `使用色号：${stats.length} 色`,
+      `导出格式：A4 分页 PDF`,
+    ].forEach((line, index) => {
+      ctx.fillText(line, summaryX, 210 + index * 34);
+    });
+
+    ctx.font = "700 20px Arial";
+    ctx.fillStyle = "#111827";
+    ctx.fillText("色号图例 / 用量", A4_CANVAS.margin, 720);
+    const columns = 2;
+    const rowHeight = 34;
+    const columnWidth = 520;
+    stats.forEach((item, index) => {
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      const x = A4_CANVAS.margin + column * columnWidth;
+      const y = 765 + row * rowHeight;
+      ctx.fillStyle = item.color?.hex ?? "#111827";
+      ctx.fillRect(x, y - 18, 24, 24);
+      ctx.strokeStyle = "rgba(17, 24, 39, 0.35)";
+      ctx.strokeRect(x, y - 18, 24, 24);
+      ctx.fillStyle = "#111827";
+      ctx.font = "13px Arial";
+      ctx.fillText(`${item.code}  ${item.color?.name ?? ""}`, x + 36, y);
+      ctx.textAlign = "right";
+      ctx.fillText(`${item.count} 颗`, x + columnWidth - 36, y);
+      ctx.textAlign = "left";
+    });
+
+    return canvas;
+  }
+
+  function makeA4GridPages() {
+    if (!pattern) return [];
+    const pages: HTMLCanvasElement[] = [];
+    const cellSize = 24;
+    const label = 42;
+    const header = 120;
+    const footer = 44;
+    const gridX = A4_CANVAS.margin + label;
+    const gridY = A4_CANVAS.margin + header + label;
+    const colsPerPage = Math.max(1, Math.floor((A4_CANVAS.width - A4_CANVAS.margin * 2 - label) / cellSize));
+    const rowsPerPage = Math.max(1, Math.floor((A4_CANVAS.height - A4_CANVAS.margin * 2 - header - footer - label) / cellSize));
+    const xPages = Math.ceil(pattern.width / colsPerPage);
+    const yPages = Math.ceil(pattern.height / rowsPerPage);
+    const totalPages = xPages * yPages;
+
+    for (let tileY = 0; tileY < yPages; tileY += 1) {
+      for (let tileX = 0; tileX < xPages; tileX += 1) {
+        const page = makeA4Canvas();
+        if (!page) continue;
+        const { canvas, ctx } = page;
+        const startCol = tileX * colsPerPage;
+        const startRow = tileY * rowsPerPage;
+        const cols = Math.min(colsPerPage, pattern.width - startCol);
+        const rows = Math.min(rowsPerPage, pattern.height - startRow);
+        const pageNumber = tileY * xPages + tileX + 1;
+
+        drawA4Header(
+          ctx,
+          "拼豆分页图纸",
+          `列 ${startCol + 1}-${startCol + cols} · 行 ${startRow + 1}-${startRow + rows}`,
+          `网格 ${pageNumber} / ${totalPages}`,
+        );
+
+        ctx.font = "10px Arial";
+        ctx.fillStyle = "#344054";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        for (let col = 0; col < cols; col += 1) {
+          ctx.fillText(String(startCol + col + 1), gridX + col * cellSize + cellSize / 2, gridY - 22);
+        }
+        ctx.textAlign = "right";
+        for (let row = 0; row < rows; row += 1) {
+          ctx.fillText(String(startRow + row + 1), gridX - 10, gridY + row * cellSize + cellSize / 2);
+        }
+
+        for (let row = 0; row < rows; row += 1) {
+          for (let col = 0; col < cols; col += 1) {
+            const cell = pattern.cells[(startRow + row) * pattern.width + startCol + col];
+            const x = gridX + col * cellSize;
+            const y = gridY + row * cellSize;
+            ctx.fillStyle = cell.hex;
+            ctx.fillRect(x, y, cellSize, cellSize);
+            ctx.fillStyle = colorDistance(rgbToLab(hexToRgb(cell.hex)), rgbToLab({ r: 255, g: 255, b: 255 })) < 45 ? "#111827" : "#ffffff";
+            ctx.font = "8px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(cell.code.replace(/^[A-Z]+/, ""), x + cellSize / 2, y + cellSize / 2 + 1);
+          }
+        }
+
+        ctx.strokeStyle = "rgba(17, 24, 39, 0.32)";
+        ctx.lineWidth = 1;
+        for (let col = 0; col <= cols; col += 1) {
+          ctx.beginPath();
+          ctx.moveTo(gridX + col * cellSize + 0.5, gridY);
+          ctx.lineTo(gridX + col * cellSize + 0.5, gridY + rows * cellSize);
+          ctx.stroke();
+        }
+        for (let row = 0; row <= rows; row += 1) {
+          ctx.beginPath();
+          ctx.moveTo(gridX, gridY + row * cellSize + 0.5);
+          ctx.lineTo(gridX + cols * cellSize, gridY + row * cellSize + 0.5);
+          ctx.stroke();
+        }
+
+        ctx.textAlign = "left";
+        ctx.fillStyle = "#5f6b7a";
+        ctx.font = "12px Arial";
+        ctx.fillText(`${imageName} · ${pattern.width} x ${pattern.height}`, A4_CANVAS.margin, A4_CANVAS.height - 52);
+        pages.push(canvas);
+      }
+    }
+    return pages;
+  }
+
   function exportPng() {
     const canvas = makeExportCanvas();
     if (!canvas) return;
@@ -444,10 +560,18 @@ export function BeadPatternApp() {
   }
 
   function exportPdf() {
-    const canvas = makeExportCanvas();
-    if (!canvas) return;
-    const jpeg = canvas.toDataURL("image/jpeg", 0.92);
-    downloadBlob(makePdfFromJpeg(jpeg, canvas.width, canvas.height), "bead-pattern.pdf");
+    const summaryPage = makeA4SummaryPage();
+    const gridPages = makeA4GridPages();
+    const pages = [summaryPage, ...gridPages].filter((page): page is HTMLCanvasElement => Boolean(page));
+    if (!pages.length) return;
+    const pdf = makePdfFromJpegPages(
+      pages.map((page) => ({
+        dataUrl: page.toDataURL("image/jpeg", 0.92),
+        imageWidth: page.width,
+        imageHeight: page.height,
+      })),
+    );
+    downloadBlob(pdf, "bead-pattern-a4.pdf");
   }
 
   function exportCsv() {
