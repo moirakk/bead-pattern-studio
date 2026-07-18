@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { COMMUNITY_SAMPLE_POSTS, createPreviewPattern, selectCommunityPosts, summarizePreviewPatternColors } from "../lib/community/feed";
+import { createCommunityPublishDraft, parseCommunityPublishDraft } from "../lib/community/draft";
 import { createRemixedProject } from "../lib/community/remix";
 import { makePdfFromJpegPages } from "../lib/export/pdf";
 import { calculatePosterPatternRect } from "../lib/export/project-poster";
@@ -369,4 +370,21 @@ test("summarizes community colors in natural MARD code order", () => {
   assert.deepEqual(usage.map((item) => item.code), sortedCodes);
   assert.equal(usage.reduce((total, item) => total + item.count, 0), COMMUNITY_SAMPLE_POSTS[0].pattern.cells.length);
   assert.ok(usage.every((item) => item.code && item.name && item.count > 0));
+});
+
+test("creates and validates a local community publish draft", () => {
+  const project = makeSavedProject("publish-draft", "2026-07-18T01:00:00.000Z");
+  project.category = "动漫";
+  const draft = createCommunityPublishDraft(
+    project,
+    { authorName: "  Moira  ", description: "  第一次做的小图纸。  ", remixPolicy: "attribution" },
+    "2026-07-18T02:00:00.000Z",
+  );
+
+  assert.equal(draft.authorName, "Moira");
+  assert.equal(draft.description, "第一次做的小图纸。");
+  assert.equal(draft.category, "动漫");
+  assert.deepEqual(parseCommunityPublishDraft(JSON.stringify(draft), project.id), draft);
+  assert.equal(parseCommunityPublishDraft(JSON.stringify(draft), "another-project"), null);
+  assert.throws(() => createCommunityPublishDraft(project, { authorName: "", description: "说明", remixPolicy: "view-only" }), /昵称/);
 });

@@ -1768,7 +1768,7 @@ export function BeadPatternApp() {
                       {sharingProjectId === project.id ? "生成中" : "分享海报"}
                     </button>
                     <button type="button" onClick={() => openCommunityPreview(project)}>
-                      社区预览
+                      准备发布
                     </button>
                     <button type="button" onClick={() => startProjectRename(project)}>
                       重命名

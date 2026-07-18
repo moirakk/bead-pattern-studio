@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CommunityPublishDraftCard } from "@/app/CommunityPublishDraft";
 import {
   COMMUNITY_SAMPLE_POSTS,
   countPreviewPatternColors,
@@ -174,18 +175,12 @@ export function CommunityDiscover({ previewProject, onClearPreview, onRemix }: C
       </div>
 
       {previewProject && previewPattern ? (
-        <section className="community-draft" aria-label="我的社区发布预览">
-          <CommunityPatternCanvas pattern={previewPattern} label={`${previewProject.title} 社区预览`} />
-          <div>
-            <span>仅本机预览</span>
-            <h3>{previewProject.title}</h3>
-            <p>{previewProject.pattern.width} x {previewProject.pattern.height} · {previewProject.pattern.cells.length.toLocaleString("zh-CN")} 颗 · {previewProject.category ?? "未分类"}</p>
-            <div>
-              <button type="button" disabled>发布准备中</button>
-              <button type="button" onClick={onClearPreview}>关闭预览</button>
-            </div>
-          </div>
-        </section>
+        <CommunityPublishDraftCard
+          project={previewProject}
+          pattern={previewPattern}
+          onClear={onClearPreview}
+          renderPattern={(targetPattern, label) => <CommunityPatternCanvas pattern={targetPattern} label={label} />}
+        />
       ) : null}
 
       <div className="community-toolbar">
