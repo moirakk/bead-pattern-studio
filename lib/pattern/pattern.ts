@@ -7,6 +7,8 @@ const DITHER_STRENGTH: Record<DitherMode, number> = {
   strong: 1,
 };
 
+const MAX_PATTERN_SIDE = 500;
+
 export function nearestColor(rgb: RGB, palette: BeadColor[]) {
   if (!palette.length) {
     throw new Error("nearestColor requires at least one palette color.");
@@ -108,11 +110,24 @@ export function buildPattern(
   colorLimit: number,
   options: BuildPatternOptions = {},
 ): Pattern {
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || width > MAX_PATTERN_SIDE || height > MAX_PATTERN_SIDE) {
+    throw new Error(`Pattern dimensions must be integers between 1 and ${MAX_PATTERN_SIDE}.`);
+  }
   if (sourcePixels.length !== width * height) {
     throw new Error(`Expected ${width * height} source pixels, received ${sourcePixels.length}.`);
   }
   if (!palette.length) {
     throw new Error("buildPattern requires at least one palette color.");
+  }
+  if (!Number.isInteger(colorLimit) || colorLimit < 1) {
+    throw new Error("Color limit must be a positive integer.");
+  }
+  const paletteCodes = new Set(palette.map((color) => color.code));
+  if (paletteCodes.size !== palette.length) {
+    throw new Error("Palette color codes must be unique.");
+  }
+  if (options.ditherMode !== undefined && !(options.ditherMode in DITHER_STRENGTH)) {
+    throw new Error("Unsupported dithering mode.");
   }
 
   const allowedPalette = selectAllowedPalette(sourcePixels, palette, colorLimit);

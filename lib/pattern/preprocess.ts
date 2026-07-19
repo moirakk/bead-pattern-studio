@@ -25,14 +25,17 @@ export function adjustImagePixels(
   height: number,
   adjustments: ImageAdjustments,
 ): RGB[] {
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) {
+    throw new Error("Image dimensions must be positive integers.");
+  }
   if (pixels.length !== width * height) {
     throw new Error(`Expected ${width * height} image pixels, received ${pixels.length}.`);
   }
 
-  const brightness = clamp(adjustments.brightness, -40, 40) * 2.2;
-  const contrastInput = clamp(adjustments.contrast, -40, 40) * 2;
+  const brightness = clamp(finiteOrZero(adjustments.brightness), -40, 40) * 2.2;
+  const contrastInput = clamp(finiteOrZero(adjustments.contrast), -40, 40) * 2;
   const contrastFactor = (259 * (contrastInput + 255)) / (255 * (259 - contrastInput));
-  const saturationFactor = 1 + clamp(adjustments.saturation, -60, 60) / 100;
+  const saturationFactor = 1 + clamp(finiteOrZero(adjustments.saturation), -60, 60) / 100;
   const backgroundLab = adjustments.backgroundRemoval === "none" ? null : rgbToLab(averageCornerColor(pixels, width, height));
   const backgroundThreshold = adjustments.backgroundRemoval === "strong" ? 23 : 12;
   const feather = adjustments.backgroundRemoval === "strong" ? 11 : 7;
@@ -109,4 +112,8 @@ function clampChannel(value: number) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+function finiteOrZero(value: number) {
+  return Number.isFinite(value) ? value : 0;
 }

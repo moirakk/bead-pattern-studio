@@ -2,6 +2,9 @@ import type { Lab, RGB } from "./types";
 
 export function hexToRgb(hex: string): RGB {
   const clean = hex.replace("#", "").trim();
+  if (!/^(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(clean)) {
+    throw new Error(`Invalid hex color: ${hex}`);
+  }
   const value = Number.parseInt(clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean, 16);
   return {
     r: (value >> 16) & 255,
@@ -11,6 +14,7 @@ export function hexToRgb(hex: string): RGB {
 }
 
 export function rgbToHex(rgb: RGB): string {
+  assertRgb(rgb);
   return `#${[rgb.r, rgb.g, rgb.b]
     .map((value) => Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, "0"))
     .join("")}`;
@@ -26,6 +30,7 @@ function pivotXyz(value: number) {
 }
 
 export function rgbToLab(rgb: RGB): Lab {
+  assertRgb(rgb);
   const r = pivotRgb(rgb.r);
   const g = pivotRgb(rgb.g);
   const b = pivotRgb(rgb.b);
@@ -44,4 +49,10 @@ export function rgbToLab(rgb: RGB): Lab {
 
 export function colorDistance(a: Lab, b: Lab) {
   return Math.hypot(a.l - b.l, a.a - b.a, a.b - b.b);
+}
+
+function assertRgb(rgb: RGB) {
+  if (![rgb.r, rgb.g, rgb.b].every((channel) => Number.isFinite(channel) && channel >= 0 && channel <= 255)) {
+    throw new Error("RGB channels must be finite values between 0 and 255.");
+  }
 }

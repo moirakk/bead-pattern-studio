@@ -1,6 +1,6 @@
 import type { CommunityPost } from "@/lib/community/feed";
 import type { SavedProject } from "@/lib/projects/backup";
-import { buildPattern, hexToRgb, makeMard291Palette } from "@/lib/pattern";
+import { hexToRgb, makeMard291Palette, nearestColor } from "@/lib/pattern";
 
 export function createRemixedProject(
   post: CommunityPost,
@@ -8,13 +8,25 @@ export function createRemixedProject(
   savedAt = new Date().toISOString(),
 ): SavedProject {
   const palette = makeMard291Palette();
-  const pattern = buildPattern(
-    post.pattern.cells.map(hexToRgb),
-    post.pattern.width,
-    post.pattern.height,
-    palette,
-    Math.min(48, palette.length),
-  );
+  if (
+    !Number.isInteger(post.pattern.width) || !Number.isInteger(post.pattern.height) ||
+    post.pattern.width < 1 || post.pattern.height < 1 ||
+    post.pattern.cells.length !== post.pattern.width * post.pattern.height ||
+    (post.pattern.codes !== undefined && post.pattern.codes.length !== post.pattern.cells.length)
+  ) {
+    throw new Error("社区图纸数据不完整，无法复刻。");
+  }
+  const colorByCode = new Map(palette.map((color) => [color.code, color]));
+  const pattern = {
+    width: post.pattern.width,
+    height: post.pattern.height,
+    cells: post.pattern.cells.map((hex, index) => {
+      const source = hexToRgb(hex);
+      const declaredCode = post.pattern.codes?.[index];
+      const color = (declaredCode ? colorByCode.get(declaredCode) : undefined) ?? nearestColor(source, palette);
+      return { code: color.code, hex: color.hex, source };
+    }),
+  };
 
   return {
     id,

@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { COMMUNITY_SAMPLE_POSTS, createPreviewPattern, selectCommunityPosts, summarizePreviewPatternColors } from "../lib/community/feed";
+import { GET as getHealth } from "../app/api/health/route";
+import { COMMUNITY_SAMPLE_POSTS, countPreviewPatternColors, createPreviewPattern, selectCommunityPosts, summarizePreviewPatternColors, type CommunityPost } from "../lib/community/feed";
 import { createCommunityPublishDraft, parseCommunityPublishDraft } from "../lib/community/draft";
 import { createRemixedProject } from "../lib/community/remix";
 import { makePdfFromJpegPages } from "../lib/export/pdf";
 import { calculatePosterPatternRect } from "../lib/export/project-poster";
-import { createProjectBackup, mergeSavedProjects, parseProjectBackup, type SavedProject } from "../lib/projects/backup";
-import { duplicateSavedProject, filterAndSortProjects, renameSavedProject, setSavedProjectCategory } from "../lib/projects/library";
+import { createProjectBackup, mergeSavedProjects, parseProjectBackup, recoverSavedProjectCollection, type SavedProject } from "../lib/projects/backup";
+import { createSavedProjectId, duplicateSavedProject, filterAndSortProjects, renameSavedProject, setSavedProjectCategory } from "../lib/projects/library";
 import { loadSavedProjects, saveSavedProjects } from "../lib/projects/storage";
 import {
   adjustImagePixels,
@@ -39,9 +40,27 @@ const red = createBeadColor("R", "Red", "#ff0000");
 const blue = createBeadColor("BL", "Blue", "#0000ff");
 const palette = [black, white, red, blue];
 
+test("reports the deployed service boundary accurately", async () => {
+  const response = await getHealth();
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.deepEqual(await response.json(), {
+    status: "ok",
+    service: "bead-pattern-studio",
+    persistence: "device-local",
+    cloudDatabase: false,
+  });
+});
+
 test("converts hex and RGB consistently", () => {
   assert.deepEqual(hexToRgb("#f0a128"), { r: 240, g: 161, b: 40 });
   assert.equal(rgbToHex({ r: 240.2, g: 161.4, b: 40.49 }), "#f0a128");
+});
+
+test("rejects malformed color inputs instead of silently turning them black", () => {
+  assert.throws(() => hexToRgb("not-a-color"), /Invalid hex color/);
+  assert.throws(() => rgbToHex({ r: Number.NaN, g: 0, b: 0 }), /RGB channels/);
+  assert.throws(() => createBeadColor("", "Empty", "#ffffff"), /cannot be empty/);
 });
 
 test("matches nearest bead color in Lab space", () => {
@@ -76,6 +95,22 @@ test("removes a corner-colored background while preserving the subject", () => {
   assert.ok(adjusted[24].r > 170 && adjusted[24].g < 80 && adjusted[24].b < 90);
 });
 
+test("validates preprocessing dimensions and neutralizes non-finite adjustments", () => {
+  assert.throws(
+    () => adjustImagePixels([], 0, 0, { brightness: 0, contrast: 0, saturation: 0, backgroundRemoval: "none" }),
+    /positive integers/,
+  );
+  assert.deepEqual(
+    adjustImagePixels([{ r: 10, g: 20, b: 30 }], 1, 1, {
+      brightness: Number.NaN,
+      contrast: Number.POSITIVE_INFINITY,
+      saturation: Number.NEGATIVE_INFINITY,
+      backgroundRemoval: "none",
+    }),
+    [{ r: 10, g: 20, b: 30 }],
+  );
+});
+
 test("builds a pattern and enforces color limit by usage", () => {
   const pixels: RGB[] = [
     { r: 255, g: 0, b: 0 },
@@ -89,6 +124,12 @@ test("builds a pattern and enforces color limit by usage", () => {
   assert.equal(pattern.height, 2);
   assert.equal(pattern.cells.length, 4);
   assert.deepEqual([...new Set(pattern.cells.map((cell) => cell.code))].sort(), ["R", "W"]);
+});
+
+test("rejects invalid pattern dimensions, limits, and duplicate palette codes", () => {
+  assert.throws(() => buildPattern([], 0, 0, palette, 1), /dimensions/);
+  assert.throws(() => buildPattern([{ r: 0, g: 0, b: 0 }], 1, 1, palette, 0), /positive integer/);
+  assert.throws(() => buildPattern([{ r: 0, g: 0, b: 0 }], 1, 1, [black, { ...white, code: "B" }], 1), /unique/);
 });
 
 test("applies optional dithering within the selected color limit", () => {
@@ -196,6 +237,17 @@ bad,not-a-color`);
   assert.equal(parsed[1].name, "SHOP002");
 });
 
+test("parses quoted palette names and rejects duplicate color codes", () => {
+  const parsed = parsePaletteCsv(`\uFEFFcode,name,hex
+SHOP001,"Warm, Paper White",#fefefe
+SHOP002,"Gray ""Stone""",#808080`);
+
+  assert.equal(parsed[0].name, "Warm, Paper White");
+  assert.equal(parsed[1].name, 'Gray "Stone"');
+  assert.throws(() => parsePaletteCsv("A1,#ffffff\na1,#000000"), /重复色号/);
+  assert.throws(() => parsePaletteCsv('A1,"Unclosed,#ffffff'), /未闭合/);
+});
+
 test("loads built-in MARD 221 palette with verified sample codes", () => {
   const mard = makeMard221Palette();
   const byCode = new Map(mard.map((color) => [color.code, color.hex]));
@@ -232,6 +284,17 @@ test("builds a multi-page PDF from JPEG page images", async () => {
   assert.match(text, /\/Subtype \/Image/);
 });
 
+test("rejects malformed PDF page data", () => {
+  assert.throws(
+    () => makePdfFromJpegPages([{ dataUrl: "data:image/png;base64,AA==", imageWidth: 1, imageHeight: 1 }]),
+    /JPEG/,
+  );
+  assert.throws(
+    () => makePdfFromJpegPages([{ dataUrl: "data:image/jpeg;base64,AA==", imageWidth: 0, imageHeight: 1 }]),
+    /dimensions/,
+  );
+});
+
 function makeSavedProject(id: string, savedAt: string): SavedProject {
   const projectPattern = buildPattern([{ r: 255, g: 0, b: 0 }], 1, 1, [red], 1);
   return {
@@ -263,6 +326,29 @@ test("round-trips versioned project backups", () => {
 
   assert.deepEqual(restored, [project]);
   assert.throws(() => parseProjectBackup('{"format":"unknown","version":1,"projects":[]}'), /无法识别/);
+});
+
+test("rejects internally inconsistent project backups", () => {
+  const project = makeSavedProject("unsafe", "2026-07-17T08:00:00.000Z");
+  const duplicateId = createProjectBackup([project, { ...project }]);
+  assert.throws(() => parseProjectBackup(duplicateId), /重复的作品 ID/);
+
+  const mismatchedPattern = structuredClone(project);
+  mismatchedPattern.pattern.cells[0].hex = "#000000";
+  assert.throws(() => parseProjectBackup(createProjectBackup([mismatchedPattern])), /损坏或不完整/);
+
+  const poisonedPalette = structuredClone(project);
+  poisonedPalette.palette[0].lab.l = 0;
+  assert.throws(() => parseProjectBackup(createProjectBackup([poisonedPalette])), /损坏或不完整/);
+});
+
+test("recovers valid local projects when another stored record is corrupted", () => {
+  const project = makeSavedProject("recoverable", "2026-07-17T08:00:00.000Z");
+  assert.deepEqual(recoverSavedProjectCollection([{ broken: true }, project]), [project]);
+  assert.throws(
+    () => parseProjectBackup(JSON.stringify({ format: "bead-pattern-studio", version: 1, projects: [{ broken: true }, project] })),
+    /损坏或不完整/,
+  );
 });
 
 test("merges project backups by id and keeps the newest copy", () => {
@@ -337,7 +423,14 @@ test("renames and duplicates saved projects without changing the original", () =
   assert.equal(copy.id, "copy");
   assert.equal(copy.title, `${original.title} 副本`);
   assert.notEqual(copy.pattern.cells, original.pattern.cells);
+  assert.notEqual(copy.pattern.cells[0].source, original.pattern.cells[0].source);
+  assert.notEqual(copy.palette[0].lab, original.palette[0].lab);
   assert.throws(() => renameSavedProject(original, "   "), /不能为空/);
+});
+
+test("creates stable-format unique project identifiers", () => {
+  assert.equal(createSavedProjectId(1_000, 0), "project-rs-0000000");
+  assert.notEqual(createSavedProjectId(1_000, 0.1), createSavedProjectId(1_000, 0.2));
 });
 
 test("updates project categories and calculates bounded poster previews", () => {
@@ -385,6 +478,24 @@ test("remixes a community pattern into an editable MARD 291 project with attribu
   assert.deepEqual(restored[0].remixSource, project.remixSource);
 });
 
+test("preserves declared community color codes without a 48-color rematch", () => {
+  const colors = makeMard291Palette().slice(0, 60);
+  const post: CommunityPost = {
+    ...COMMUNITY_SAMPLE_POSTS[0],
+    id: "sixty-colors",
+    pattern: {
+      width: 60,
+      height: 1,
+      cells: colors.map((color) => color.hex),
+      codes: colors.map((color) => color.code),
+    },
+  };
+  const project = createRemixedProject(post, "remix-sixty", "2026-07-17T12:00:00.000Z");
+
+  assert.deepEqual(project.pattern.cells.map((cell) => cell.code), colors.map((color) => color.code));
+  assert.equal(project.settings.colorLimit, 60);
+});
+
 test("summarizes community colors in natural MARD code order", () => {
   const usage = summarizePreviewPatternColors(COMMUNITY_SAMPLE_POSTS[0].pattern);
   const sortedCodes = usage.map((item) => item.code).toSorted((a, b) =>
@@ -394,6 +505,12 @@ test("summarizes community colors in natural MARD code order", () => {
   assert.deepEqual(usage.map((item) => item.code), sortedCodes);
   assert.equal(usage.reduce((total, item) => total + item.count, 0), COMMUNITY_SAMPLE_POSTS[0].pattern.cells.length);
   assert.ok(usage.every((item) => item.code && item.name && item.count > 0));
+});
+
+test("counts equal-looking community colors by their declared bead code", () => {
+  const pattern = { width: 2, height: 1, cells: ["#ffebfa", "#ffebfa"], codes: ["Q4", "R11"] };
+  assert.equal(countPreviewPatternColors(pattern), 2);
+  assert.deepEqual(summarizePreviewPatternColors(pattern).map((item) => item.code), ["Q4", "R11"]);
 });
 
 test("creates and validates a local community publish draft", () => {
@@ -411,4 +528,8 @@ test("creates and validates a local community publish draft", () => {
   assert.deepEqual(parseCommunityPublishDraft(JSON.stringify(draft), project.id), draft);
   assert.equal(parseCommunityPublishDraft(JSON.stringify(draft), "another-project"), null);
   assert.throws(() => createCommunityPublishDraft(project, { authorName: "", description: "说明", remixPolicy: "view-only" }), /昵称/);
+  assert.throws(
+    () => createCommunityPublishDraft(project, { authorName: "Moira", description: "说明", remixPolicy: "invalid" as never }),
+    /复刻权限/,
+  );
 });

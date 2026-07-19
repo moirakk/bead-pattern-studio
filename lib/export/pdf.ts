@@ -12,7 +12,9 @@ const A4_PORTRAIT_POINTS = {
 };
 
 function dataUrlToBytes(dataUrl: string) {
-  const base64 = dataUrl.split(",")[1] ?? "";
+  const match = /^data:image\/jpeg;base64,([a-z0-9+/=]+)$/i.exec(dataUrl);
+  if (!match) throw new Error("PDF pages must be base64 JPEG data URLs.");
+  const base64 = match[1];
   if (typeof globalThis.atob === "function") {
     const binary = globalThis.atob(base64);
     const bytes = new Uint8Array(binary.length);
@@ -28,6 +30,19 @@ export function makePdfFromJpegPages(pages: PdfImagePage[]) {
   if (!pages.length) {
     throw new Error("makePdfFromJpegPages requires at least one page.");
   }
+  if (pages.length > 100) {
+    throw new Error("A PDF export cannot contain more than 100 pages.");
+  }
+  pages.forEach((page) => {
+    if (
+      !Number.isInteger(page.imageWidth) || !Number.isInteger(page.imageHeight) ||
+      page.imageWidth < 1 || page.imageHeight < 1 ||
+      (page.pageWidth !== undefined && (!Number.isFinite(page.pageWidth) || page.pageWidth <= 0)) ||
+      (page.pageHeight !== undefined && (!Number.isFinite(page.pageHeight) || page.pageHeight <= 0))
+    ) {
+      throw new Error("PDF page dimensions must be positive numbers.");
+    }
+  });
 
   const encoder = new TextEncoder();
   const chunks: Uint8Array[] = [];

@@ -1,4 +1,4 @@
-import type { BeadColor, DitherMode, ImageAdjustments, Pattern, RGB } from "@/lib/pattern";
+import { hexToRgb, rgbToLab, type BeadColor, type DitherMode, type ImageAdjustments, type Pattern, type RGB } from "@/lib/pattern";
 
 export type Crop = {
   x: number;
@@ -51,6 +51,8 @@ const MAX_PATTERN_SIDE = 500;
 const MAX_PATTERN_CELLS = MAX_PATTERN_SIDE * MAX_PATTERN_SIDE;
 const MAX_PALETTE_COLORS = 1000;
 const MAX_THUMBNAIL_LENGTH = 1_000_000;
+export const MAX_PROJECT_BACKUP_BYTES = 96 * 1024 * 1024;
+const PROJECT_CATEGORIES = new Set(["未分类", "人物", "动漫", "游戏", "动物", "花卉", "风景", "其他"]);
 
 export function createProjectBackup(projects: SavedProject[], exportedAt = new Date().toISOString()) {
   const envelope: ProjectBackupEnvelope = {
@@ -63,6 +65,9 @@ export function createProjectBackup(projects: SavedProject[], exportedAt = new D
 }
 
 export function parseProjectBackup(text: string): SavedProject[] {
+  if (text.length > MAX_PROJECT_BACKUP_BYTES) {
+    throw new Error("备份文件过大，不能超过 96 MB。");
+  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -85,7 +90,20 @@ export function parseSavedProjectCollection(value: unknown): SavedProject[] {
   if (projects.some((project) => project === null)) {
     throw new Error("作品数据有损坏或不完整。");
   }
-  return projects as SavedProject[];
+  const validProjects = projects as SavedProject[];
+  if (new Set(validProjects.map((project) => project.id)).size !== validProjects.length) {
+    throw new Error("备份中存在重复的作品 ID。");
+  }
+  return validProjects;
+}
+
+export function recoverSavedProjectCollection(value: unknown): SavedProject[] {
+  if (!Array.isArray(value)) return [];
+  const recovered = value
+    .slice(0, MAX_BACKUP_PROJECTS)
+    .map(parseSavedProject)
+    .filter((project): project is SavedProject => project !== null);
+  return mergeSavedProjects([], recovered, MAX_BACKUP_PROJECTS);
 }
 
 export function mergeSavedProjects(current: SavedProject[], imported: SavedProject[], limit: number) {
@@ -106,11 +124,21 @@ function parseSavedProject(value: unknown): SavedProject | null {
   if (!isRecord(value)) return null;
   if (!isShortString(value.id, 200) || !isShortString(value.title, 200) || !isShortString(value.sourceName, 300)) return null;
   if (typeof value.savedAt !== "string" || !Number.isFinite(Date.parse(value.savedAt))) return null;
-  if (value.category !== undefined && !isShortString(value.category, 40)) return null;
+  if (value.category !== undefined && (typeof value.category !== "string" || !PROJECT_CATEGORIES.has(value.category))) return null;
   if (value.remixSource !== undefined && !isRemixSource(value.remixSource)) return null;
   if (!isPattern(value.pattern) || !Array.isArray(value.palette) || value.palette.length > MAX_PALETTE_COLORS) return null;
   if (!value.palette.every(isBeadColor) || !isSettings(value.settings)) return null;
   if (typeof value.thumbnail !== "string" || value.thumbnail.length > MAX_THUMBNAIL_LENGTH) return null;
+
+  const paletteCodes = new Set(value.palette.map((color) => color.code));
+  if (paletteCodes.size !== value.palette.length) return null;
+  if (value.settings.gridWidth !== value.pattern.width || value.settings.gridHeight !== value.pattern.height) return null;
+  const hasPalette = value.settings.paletteSourceKind === "builtin" || value.settings.paletteSourceKind === "imported";
+  if (hasPalette) {
+    if (!value.palette.length || value.settings.colorLimit > value.palette.length || !paletteCodes.has(value.settings.selectedCode)) return null;
+    const hexByCode = new Map(value.palette.map((color) => [color.code, color.hex.toLowerCase()]));
+    if (!value.pattern.cells.every((cell) => hexByCode.get(cell.code) === cell.hex.toLowerCase())) return null;
+  }
 
   return value as SavedProject;
 }
@@ -141,7 +169,7 @@ function isPattern(value: unknown): value is Pattern {
 }
 
 function isBeadColor(value: unknown): value is BeadColor {
-  return (
+  const structurallyValid = (
     isRecord(value) &&
     isShortString(value.code, 80) &&
     isShortString(value.name, 200) &&
@@ -152,6 +180,16 @@ function isBeadColor(value: unknown): value is BeadColor {
     isFiniteNumber(value.lab.l) &&
     isFiniteNumber(value.lab.a) &&
     isFiniteNumber(value.lab.b)
+  );
+  if (!structurallyValid) return false;
+  const color = value as unknown as BeadColor;
+  const expectedRgb = hexToRgb(color.hex);
+  const expectedLab = rgbToLab(expectedRgb);
+  return (
+    color.rgb.r === expectedRgb.r && color.rgb.g === expectedRgb.g && color.rgb.b === expectedRgb.b &&
+    Math.abs(color.lab.l - expectedLab.l) < 0.001 &&
+    Math.abs(color.lab.a - expectedLab.a) < 0.001 &&
+    Math.abs(color.lab.b - expectedLab.b) < 0.001
   );
 }
 

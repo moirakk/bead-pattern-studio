@@ -9,6 +9,7 @@ import { createProjectPosterBlob } from "@/lib/export/project-poster";
 import { deliverExportFile, selectionHaptic } from "@/lib/native/share";
 import {
   createProjectBackup,
+  MAX_PROJECT_BACKUP_BYTES,
   mergeSavedProjects,
   parseProjectBackup,
   type Crop,
@@ -18,6 +19,7 @@ import {
 import { loadSavedProjects, saveSavedProjects } from "@/lib/projects/storage";
 import {
   duplicateSavedProject,
+  createSavedProjectId,
   filterAndSortProjects,
   PROJECT_CATEGORIES,
   renameSavedProject,
@@ -78,6 +80,9 @@ const A4_CANVAS = {
 };
 
 const MAX_SAVED_PROJECTS = 100;
+const MAX_IMAGE_FILE_BYTES = 30 * 1024 * 1024;
+const MAX_IMAGE_PIXELS = 80_000_000;
+const MAX_PALETTE_FILE_BYTES = 2_000_000;
 
 function stripFileExtension(filename: string) {
   return filename.replace(/\.[^/.]+$/, "");
@@ -210,6 +215,7 @@ export function BeadPatternApp() {
   const [selection, setSelection] = useState<SelectionDraft | null>(null);
   const [isSelecting, setIsSelecting] = useState(false);
   const [savedProjects, setSavedProjects] = useState<SavedProject[]>([]);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [projectsReady, setProjectsReady] = useState(false);
   const [pendingDeleteProjectId, setPendingDeleteProjectId] = useState<string | null>(null);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
@@ -428,11 +434,30 @@ export function BeadPatternApp() {
   }, [pattern, activeCell, selectedArea]);
 
   function handleImageUpload(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
     const file = event.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setStatus("请选择有效的图片文件。");
+      input.value = "";
+      return;
+    }
+    if (file.size > MAX_IMAGE_FILE_BYTES) {
+      setStatus("图片不能超过 30 MB，请先压缩后再上传。");
+      input.value = "";
+      return;
+    }
     const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
     image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      if (image.naturalWidth * image.naturalHeight > MAX_IMAGE_PIXELS) {
+        setStatus("图片像素过大，请缩小到 8000 万像素以内。");
+        input.value = "";
+        return;
+      }
       setSourceImage(image);
+      setActiveProjectId(null);
       setImageName(file.name);
       setProjectTitle((current) => {
         const shouldAutoName = !current.trim() || current === "未命名拼豆图纸" || current === stripFileExtension(imageName);
@@ -443,8 +468,14 @@ export function BeadPatternApp() {
       }
       setActiveMobilePanel("pattern");
       setStatus("图片已载入，正在生成图纸。");
+      input.value = "";
     };
-    image.src = URL.createObjectURL(file);
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      setStatus("图片无法解码，请转换为 JPEG、PNG 或 WebP 后重试。");
+      input.value = "";
+    };
+    image.src = objectUrl;
   }
 
   function updateGridWidth(value: number) {
@@ -475,8 +506,14 @@ export function BeadPatternApp() {
   }
 
   function handlePaletteUpload(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
     const file = event.target.files?.[0];
     if (!file) return;
+    if (file.size > MAX_PALETTE_FILE_BYTES) {
+      setStatus("色卡 CSV 不能超过 2 MB。");
+      input.value = "";
+      return;
+    }
     file.text().then((text) => {
       const parsed = parsePaletteCsv(text);
       if (parsed.length) {
@@ -489,6 +526,10 @@ export function BeadPatternApp() {
       } else {
         setStatus("色卡 CSV 未识别：请使用 code,name,hex 或 code,hex。");
       }
+    }).catch((error: unknown) => {
+      setStatus(error instanceof Error ? error.message : "色卡 CSV 读取失败。");
+    }).finally(() => {
+      input.value = "";
     });
   }
 
@@ -547,12 +588,16 @@ export function BeadPatternApp() {
     }
     const title = exportTitle;
     const now = new Date().toISOString();
+    const previousProject = activeProjectId
+      ? savedProjects.find((project) => project.id === activeProjectId)
+      : undefined;
     const savedProject: SavedProject = {
-      id: makeSafeFilename(title).toLowerCase() || `project-${Date.now()}`,
+      id: previousProject?.id ?? createSavedProjectId(),
       title,
       sourceName: imageName,
       savedAt: now,
-      category: "未分类",
+      category: previousProject?.category ?? "未分类",
+      remixSource: previousProject?.remixSource,
       pattern,
       palette,
       settings: {
@@ -578,6 +623,7 @@ export function BeadPatternApp() {
       return;
     }
     setSavedProjects(nextProjects);
+    setActiveProjectId(savedProject.id);
     setPortfolioNotice(`已保存作品「${title}」。`);
     setStatus(`已保存作品「${title}」。`);
   }
@@ -586,6 +632,7 @@ export function BeadPatternApp() {
     const projectHasUsablePalette =
       (project.settings.paletteSourceKind === "builtin" || project.settings.paletteSourceKind === "imported") && project.palette.length > 0;
     setSourceImage(null);
+    setActiveProjectId(project.id);
     setProjectTitle(project.title);
     setImageName(project.sourceName);
     setPalette(projectHasUsablePalette ? project.palette : makeMard291Palette());
@@ -636,6 +683,7 @@ export function BeadPatternApp() {
       setPendingDeleteProjectId(null);
       if (editingProjectId === projectId) setEditingProjectId(null);
       if (communityPreviewProjectId === projectId) setCommunityPreviewProjectId(null);
+      if (activeProjectId === projectId) setActiveProjectId(null);
       setPortfolioNotice("已删除本地保存的作品。");
       setStatus("已删除本地保存的作品。");
     } catch {
@@ -668,7 +716,7 @@ export function BeadPatternApp() {
   }
 
   async function copySavedProject(project: SavedProject) {
-    const copy = duplicateSavedProject(project, `${project.id}-copy-${Date.now()}`);
+    const copy = duplicateSavedProject(project, createSavedProjectId());
     const nextProjects = [copy, ...savedProjects].slice(0, MAX_SAVED_PROJECTS);
     try {
       await saveSavedProjects(nextProjects);
@@ -715,7 +763,7 @@ export function BeadPatternApp() {
   }
 
   async function remixCommunityPost(post: CommunityPost) {
-    const remixed = createRemixedProject(post);
+    const remixed = createRemixedProject(post, createSavedProjectId());
     remixed.thumbnail = makeSavedProjectThumbnail(remixed.pattern);
     const nextProjects = [remixed, ...savedProjects].slice(0, MAX_SAVED_PROJECTS);
     await saveSavedProjects(nextProjects);
@@ -747,6 +795,9 @@ export function BeadPatternApp() {
     if (!file) return;
 
     try {
+      if (file.size > MAX_PROJECT_BACKUP_BYTES) {
+        throw new Error("备份文件过大，不能超过 96 MB。");
+      }
       const imported = parseProjectBackup(await file.text());
       const nextProjects = mergeSavedProjects(savedProjects, imported, MAX_SAVED_PROJECTS);
       await saveSavedProjects(nextProjects);

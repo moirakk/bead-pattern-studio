@@ -26,6 +26,9 @@ export function createCommunityPublishDraft(
   const description = fields.description.trim();
   if (!authorName || authorName.length > 30) throw new Error("昵称需为 1 到 30 个字符。");
   if (!description || description.length > 140) throw new Error("作品说明需为 1 到 140 个字符。");
+  if (fields.remixPolicy !== "attribution" && fields.remixPolicy !== "view-only") {
+    throw new Error("复刻权限设置无效。");
+  }
 
   return {
     version: 1,

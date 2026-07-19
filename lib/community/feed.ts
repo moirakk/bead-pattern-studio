@@ -7,6 +7,7 @@ export type CommunityPreviewPattern = {
   width: number;
   height: number;
   cells: string[];
+  codes?: string[];
 };
 
 export type CommunityPost = {
@@ -60,6 +61,9 @@ export function createPreviewPattern(
   height: number,
   colorAt: (x: number, y: number) => string,
 ): CommunityPreviewPattern {
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || width > 500 || height > 500) {
+    throw new Error("Community pattern dimensions must be integers between 1 and 500.");
+  }
   return {
     width,
     height,
@@ -68,15 +72,19 @@ export function createPreviewPattern(
 }
 
 export function countPreviewPatternColors(pattern: CommunityPreviewPattern) {
-  return new Set(pattern.cells).size;
+  assertCommunityPattern(pattern);
+  return new Set(pattern.codes ?? pattern.cells).size;
 }
 
 export function summarizePreviewPatternColors(pattern: CommunityPreviewPattern): CommunityColorUsage[] {
+  assertCommunityPattern(pattern);
   const counts = new Map<string, CommunityColorUsage>();
   const matchedByHex = new Map<string, (typeof MARD_291)[number]>();
 
-  pattern.cells.forEach((hex) => {
-    let color = matchedByHex.get(hex);
+  pattern.cells.forEach((hex, index) => {
+    const declaredCode = pattern.codes?.[index];
+    let color = declaredCode ? MARD_BY_CODE.get(declaredCode) : undefined;
+    color ??= matchedByHex.get(hex);
     if (!color) {
       color = nearestColor(hexToRgb(hex), MARD_291);
       matchedByHex.set(hex, color);
@@ -96,19 +104,37 @@ export function summarizePreviewPatternColors(pattern: CommunityPreviewPattern):
 }
 
 const MARD_291 = makeMard291Palette();
+const MARD_BY_CODE = new Map(MARD_291.map((color) => [color.code, color]));
 
 function matchPatternToMard(pattern: CommunityPreviewPattern): CommunityPreviewPattern {
-  const colorCache = new Map<string, string>();
+  const colorCache = new Map<string, (typeof MARD_291)[number]>();
+  const codes: string[] = [];
   return {
     ...pattern,
     cells: pattern.cells.map((hex) => {
       const cached = colorCache.get(hex);
-      if (cached) return cached;
-      const matched = nearestColor(hexToRgb(hex), MARD_291).hex;
+      if (cached) {
+        codes.push(cached.code);
+        return cached.hex;
+      }
+      const matched = nearestColor(hexToRgb(hex), MARD_291);
       colorCache.set(hex, matched);
-      return matched;
+      codes.push(matched.code);
+      return matched.hex;
     }),
+    codes,
   };
+}
+
+function assertCommunityPattern(pattern: CommunityPreviewPattern) {
+  if (
+    !Number.isInteger(pattern.width) || !Number.isInteger(pattern.height) ||
+    pattern.width < 1 || pattern.height < 1 || pattern.width > 500 || pattern.height > 500 ||
+    pattern.cells.length !== pattern.width * pattern.height ||
+    (pattern.codes !== undefined && pattern.codes.length !== pattern.cells.length)
+  ) {
+    throw new Error("社区图纸数据不完整。");
+  }
 }
 
 const cherryPattern = matchPatternToMard(createPreviewPattern(18, 18, (x, y) => {

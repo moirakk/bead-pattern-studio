@@ -1,4 +1,4 @@
-import { mergeSavedProjects, parseSavedProjectCollection, type SavedProject } from "@/lib/projects/backup";
+import { mergeSavedProjects, recoverSavedProjectCollection, type SavedProject } from "@/lib/projects/backup";
 
 const DATABASE_NAME = "bead-pattern-studio";
 const DATABASE_VERSION = 1;
@@ -29,21 +29,23 @@ export async function loadSavedProjects(limit: number, environment?: StorageEnvi
 
   try {
     const database = await openDatabase(indexedDb);
-    const storedProjects = parseSavedProjectCollection(await readAllProjects(database));
-    if (!legacyProjects.length) {
-      database.close();
-      return {
-        projects: mergeSavedProjects([], storedProjects, limit),
-        backend: "indexeddb",
-        migrated: false,
-      };
-    }
+    try {
+      const storedProjects = recoverSavedProjectCollection(await readAllProjects(database));
+      if (!legacyProjects.length) {
+        return {
+          projects: mergeSavedProjects([], storedProjects, limit),
+          backend: "indexeddb",
+          migrated: false,
+        };
+      }
 
-    const projects = mergeSavedProjects(storedProjects, legacyProjects, limit);
-    await replaceAllProjects(database, projects);
-    database.close();
-    localStorage?.removeItem(LEGACY_STORAGE_KEY);
-    return { projects, backend: "indexeddb", migrated: true };
+      const projects = mergeSavedProjects(storedProjects, legacyProjects, limit);
+      await replaceAllProjects(database, projects);
+      localStorage?.removeItem(LEGACY_STORAGE_KEY);
+      return { projects, backend: "indexeddb", migrated: true };
+    } finally {
+      database.close();
+    }
   } catch {
     return { projects: mergeSavedProjects([], legacyProjects, limit), backend: "localstorage", migrated: false };
   }
@@ -59,8 +61,11 @@ export async function saveSavedProjects(
   if (indexedDb) {
     try {
       const database = await openDatabase(indexedDb);
-      await replaceAllProjects(database, projects);
-      database.close();
+      try {
+        await replaceAllProjects(database, projects);
+      } finally {
+        database.close();
+      }
       localStorage?.removeItem(LEGACY_STORAGE_KEY);
       return "indexeddb";
     } catch {
@@ -90,7 +95,7 @@ function readLegacyProjects(storage: Storage | null) {
   if (!storage) return [];
   try {
     const raw = storage.getItem(LEGACY_STORAGE_KEY);
-    return raw ? parseSavedProjectCollection(JSON.parse(raw)) : [];
+    return raw ? recoverSavedProjectCollection(JSON.parse(raw)) : [];
   } catch {
     return [];
   }

@@ -63,11 +63,13 @@ const MARD_291_EXTENSION_RAW = [
 ] as const;
 
 export function createBeadColor(code: string, name: string, hex: string): BeadColor {
+  const normalizedCode = code.trim();
+  if (!normalizedCode) throw new Error("Bead color code cannot be empty.");
   const normalizedHex = hex.startsWith("#") ? hex : `#${hex}`;
   const rgb = hexToRgb(normalizedHex);
   return {
-    code: code.trim(),
-    name: name.trim() || code.trim(),
+    code: normalizedCode,
+    name: name.trim() || normalizedCode,
     hex: normalizedHex.toLowerCase(),
     rgb,
     lab: rgbToLab(rgb),
@@ -83,18 +85,53 @@ export function makeMard291Palette() {
 }
 
 export function parsePaletteCsv(text: string) {
-  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (text.length > 2_000_000) throw new Error("色卡 CSV 不能超过 2 MB。");
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
   const parsed: BeadColor[] = [];
-  for (const line of lines) {
-    const parts = line.split(",").map((part) => part.trim());
+  const seenCodes = new Set<string>();
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index].trim();
+    if (!line) continue;
+    const parts = parseCsvLine(line).map((part) => part.trim());
     if (parts.length < 2) continue;
     const [first, second, third] = parts;
     if (/^code$/i.test(first) || /^色号$/.test(first)) continue;
     const code = first;
     const maybeHex = third ?? second;
     const name = third ? second : first;
-    if (!/^#?[0-9a-f]{6}$/i.test(maybeHex)) continue;
+    if (!code || !/^#?[0-9a-f]{6}$/i.test(maybeHex)) continue;
+    const normalizedCode = code.toLocaleUpperCase("en-US");
+    if (seenCodes.has(normalizedCode)) {
+      throw new Error(`色卡第 ${index + 1} 行存在重复色号：${code}`);
+    }
+    seenCodes.add(normalizedCode);
     parsed.push(createBeadColor(code, name, maybeHex));
+    if (parsed.length > 1000) throw new Error("单张色卡最多支持 1000 个色号。");
   }
   return parsed;
+}
+
+function parseCsvLine(line: string) {
+  const fields: string[] = [];
+  let field = "";
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    if (character === '"') {
+      if (quoted && line[index + 1] === '"') {
+        field += '"';
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (character === "," && !quoted) {
+      fields.push(field);
+      field = "";
+    } else {
+      field += character;
+    }
+  }
+  if (quoted) throw new Error("色卡 CSV 含有未闭合的引号。");
+  fields.push(field);
+  return fields;
 }
