@@ -296,6 +296,68 @@ input[type="range"] {
   accent-color: var(--coral);
 }
 
+.image-adjustment-header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.image-adjustment-header strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.image-adjustment-header button {
+  min-height: 30px;
+  padding: 0 10px;
+  color: var(--teal-dark);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.image-adjustment-header button:disabled {
+  color: #9aa6ad;
+  background: #f1f4f5;
+}
+
+.image-adjustment-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.image-adjustment-grid label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 10px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.image-adjustment-grid b {
+  min-width: 28px;
+  color: var(--ink);
+  font-size: 11px;
+  text-align: right;
+}
+
+.image-adjustment-grid input {
+  grid-column: 1 / -1;
+}
+
+.image-background-mode {
+  margin-top: 12px;
+}
+
 .number-row {
   display: grid;
   grid-template-columns: 1fr 1fr;

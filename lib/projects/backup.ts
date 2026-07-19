@@ -1,4 +1,4 @@
-import type { BeadColor, DitherMode, Pattern, RGB } from "@/lib/pattern";
+import type { BeadColor, DitherMode, ImageAdjustments, Pattern, RGB } from "@/lib/pattern";
 
 export type Crop = {
   x: number;
@@ -27,6 +27,7 @@ export type SavedProject = {
     gridHeight: number;
     colorLimit: number;
     ditherMode: DitherMode;
+    imageAdjustments?: ImageAdjustments;
     crop: Crop;
     selectedCode: string;
     paletteName?: string;
@@ -159,9 +160,20 @@ function isSettings(value: unknown): value is SavedProject["settings"] {
   if (!isIntegerInRange(value.gridWidth, 1, MAX_PATTERN_SIDE) || !isIntegerInRange(value.gridHeight, 1, MAX_PATTERN_SIDE)) return false;
   if (!isIntegerInRange(value.colorLimit, 1, MAX_PALETTE_COLORS)) return false;
   if (value.ditherMode !== "none" && value.ditherMode !== "soft" && value.ditherMode !== "strong") return false;
+  if (value.imageAdjustments !== undefined && !isImageAdjustments(value.imageAdjustments)) return false;
   if (!isCrop(value.crop) || !isShortString(value.selectedCode, 80)) return false;
   if (value.paletteName !== undefined && !isShortString(value.paletteName, 300)) return false;
   return value.paletteSourceKind === undefined || value.paletteSourceKind === "builtin" || value.paletteSourceKind === "imported" || value.paletteSourceKind === "missing";
+}
+
+function isImageAdjustments(value: unknown): value is ImageAdjustments {
+  return (
+    isRecord(value) &&
+    isFiniteNumber(value.brightness) && value.brightness >= -40 && value.brightness <= 40 &&
+    isFiniteNumber(value.contrast) && value.contrast >= -40 && value.contrast <= 40 &&
+    isFiniteNumber(value.saturation) && value.saturation >= -60 && value.saturation <= 60 &&
+    (value.backgroundRemoval === "none" || value.backgroundRemoval === "soft" || value.backgroundRemoval === "strong")
+  );
 }
 
 function isCrop(value: unknown): value is Crop {

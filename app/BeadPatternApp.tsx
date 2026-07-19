@@ -28,11 +28,13 @@ import {
 } from "@/lib/projects/library";
 import {
   buildPattern,
+  adjustImagePixels,
   canRedoPattern,
   canUndoPattern,
   colorDistance,
   commitPattern,
   createPatternHistory,
+  DEFAULT_IMAGE_ADJUSTMENTS,
   hexToRgb,
   makeMard221Palette,
   makeMard291Palette,
@@ -46,6 +48,7 @@ import {
   undoPattern,
   type BeadColor,
   type DitherMode,
+  type ImageAdjustments,
   type Pattern,
   type PatternHistory,
   type RGB,
@@ -199,6 +202,7 @@ export function BeadPatternApp() {
   const [colorLimit, setColorLimit] = useState(48);
   const [ditherMode, setDitherMode] = useState<DitherMode>("none");
   const [crop, setCrop] = useState<Crop>({ x: 0, y: 0, width: 100, height: 100 });
+  const [imageAdjustments, setImageAdjustments] = useState<ImageAdjustments>(DEFAULT_IMAGE_ADJUSTMENTS);
   const [patternHistory, setPatternHistory] = useState<PatternHistory>(() => createPatternHistory(null));
   const [selectedCode, setSelectedCode] = useState("H7");
   const [activeCell, setActiveCell] = useState<number | null>(null);
@@ -325,7 +329,8 @@ export function BeadPatternApp() {
           b: Math.round(data[index + 2] * alpha + 251 * (1 - alpha)),
         });
       }
-      const nextPattern = buildPattern(pixels, gridWidth, gridHeight, palette, colorLimit, { ditherMode });
+      const adjustedPixels = adjustImagePixels(pixels, gridWidth, gridHeight, imageAdjustments);
+      const nextPattern = buildPattern(adjustedPixels, gridWidth, gridHeight, palette, colorLimit, { ditherMode });
       setPatternHistory((current) => resetPatternHistory(current, nextPattern));
       setActiveCell(null);
       setSelection(null);
@@ -334,7 +339,7 @@ export function BeadPatternApp() {
       setStatus(`已生成 ${gridWidth} x ${gridHeight}，共 ${gridWidth * gridHeight} 颗豆，${ditherLabel}。`);
     }, 120);
     return () => window.clearTimeout(timer);
-  }, [sourceImage, gridWidth, gridHeight, palette, colorLimit, ditherMode, crop, hasUsablePalette]);
+  }, [sourceImage, gridWidth, gridHeight, palette, colorLimit, ditherMode, crop, imageAdjustments, hasUsablePalette]);
 
   useEffect(() => {
     const canvas = sourcePreviewRef.current;
@@ -465,6 +470,10 @@ export function BeadPatternApp() {
     });
   }
 
+  function updateImageAdjustment<K extends keyof ImageAdjustments>(key: K, value: ImageAdjustments[K]) {
+    setImageAdjustments((current) => ({ ...current, [key]: value }));
+  }
+
   function handlePaletteUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -551,6 +560,7 @@ export function BeadPatternApp() {
         gridHeight,
         colorLimit,
         ditherMode,
+        imageAdjustments,
         crop,
         selectedCode,
         paletteName,
@@ -585,6 +595,7 @@ export function BeadPatternApp() {
     setGridHeight(project.settings.gridHeight);
     setColorLimit(project.settings.colorLimit);
     setDitherMode(project.settings.ditherMode);
+    setImageAdjustments(project.settings.imageAdjustments ?? DEFAULT_IMAGE_ADJUSTMENTS);
     setCrop(project.settings.crop);
     setSelectedCode(projectHasUsablePalette ? project.settings.selectedCode : "H7");
     setPatternHistory((current) => resetPatternHistory(current, projectHasUsablePalette ? project.pattern : null));
@@ -1441,6 +1452,40 @@ export function BeadPatternApp() {
               高度 %
               <input type="range" min="10" max="100" value={crop.height} onChange={(event) => updateCrop("height", Number(event.target.value))} />
             </label>
+          </div>
+
+          <div className="image-adjustment-header">
+            <strong>图片优化</strong>
+            <button type="button" onClick={() => setImageAdjustments(DEFAULT_IMAGE_ADJUSTMENTS)} disabled={
+              imageAdjustments.brightness === 0 &&
+              imageAdjustments.contrast === 0 &&
+              imageAdjustments.saturation === 0 &&
+              imageAdjustments.backgroundRemoval === "none"
+            }>重置</button>
+          </div>
+          <div className="image-adjustment-grid">
+            <label>
+              <span>亮度</span><b>{imageAdjustments.brightness > 0 ? "+" : ""}{imageAdjustments.brightness}</b>
+              <input type="range" min="-40" max="40" value={imageAdjustments.brightness} onChange={(event) => updateImageAdjustment("brightness", Number(event.target.value))} />
+            </label>
+            <label>
+              <span>对比度</span><b>{imageAdjustments.contrast > 0 ? "+" : ""}{imageAdjustments.contrast}</b>
+              <input type="range" min="-40" max="40" value={imageAdjustments.contrast} onChange={(event) => updateImageAdjustment("contrast", Number(event.target.value))} />
+            </label>
+            <label>
+              <span>饱和度</span><b>{imageAdjustments.saturation > 0 ? "+" : ""}{imageAdjustments.saturation}</b>
+              <input type="range" min="-60" max="60" value={imageAdjustments.saturation} onChange={(event) => updateImageAdjustment("saturation", Number(event.target.value))} />
+            </label>
+          </div>
+          <div className="mode-field image-background-mode">
+            <span>去背景</span>
+            <div className="mode-toggle" role="group" aria-label="去背景强度">
+              {([[
+                "none", "关闭",
+              ], ["soft", "柔和"], ["strong", "强力"]] as [ImageAdjustments["backgroundRemoval"], string][]).map(([mode, label]) => (
+                <button key={mode} type="button" className={imageAdjustments.backgroundRemoval === mode ? "active" : ""} aria-pressed={imageAdjustments.backgroundRemoval === mode} onClick={() => updateImageAdjustment("backgroundRemoval", mode)}>{label}</button>
+              ))}
+            </div>
           </div>
 
           <div className="panel-title compact">

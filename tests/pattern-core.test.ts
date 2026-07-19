@@ -9,6 +9,7 @@ import { createProjectBackup, mergeSavedProjects, parseProjectBackup, type Saved
 import { duplicateSavedProject, filterAndSortProjects, renameSavedProject, setSavedProjectCategory } from "../lib/projects/library";
 import { loadSavedProjects, saveSavedProjects } from "../lib/projects/storage";
 import {
+  adjustImagePixels,
   buildPattern,
   canRedoPattern,
   canUndoPattern,
@@ -51,6 +52,28 @@ test("matches nearest bead color in Lab space", () => {
 test("Lab distance is zero for identical colors", () => {
   const lab = rgbToLab({ r: 128, g: 64, b: 32 });
   assert.equal(colorDistance(lab, lab), 0);
+});
+
+test("applies non-destructive image adjustments before palette matching", () => {
+  const source = [
+    { r: 30, g: 80, b: 160 },
+    { r: 220, g: 180, b: 90 },
+  ];
+  const unchanged = adjustImagePixels(source, 2, 1, { brightness: 0, contrast: 0, saturation: 0, backgroundRemoval: "none" });
+  const brighter = adjustImagePixels(source, 2, 1, { brightness: 20, contrast: 0, saturation: 0, backgroundRemoval: "none" });
+
+  assert.deepEqual(unchanged, source);
+  assert.ok(brighter[0].r > source[0].r && brighter[0].g > source[0].g && brighter[0].b > source[0].b);
+  assert.deepEqual(source[0], { r: 30, g: 80, b: 160 });
+});
+
+test("removes a corner-colored background while preserving the subject", () => {
+  const pixels = Array.from({ length: 49 }, () => ({ r: 242, g: 240, b: 235 }));
+  pixels[24] = { r: 195, g: 35, b: 48 };
+  const adjusted = adjustImagePixels(pixels, 7, 7, { brightness: 0, contrast: 0, saturation: 0, backgroundRemoval: "strong" });
+
+  assert.deepEqual(adjusted[0], { r: 247, g: 248, b: 251 });
+  assert.ok(adjusted[24].r > 170 && adjusted[24].g < 80 && adjusted[24].b < 90);
 });
 
 test("builds a pattern and enforces color limit by usage", () => {
@@ -234,6 +257,7 @@ function makeSavedProject(id: string, savedAt: string): SavedProject {
 
 test("round-trips versioned project backups", () => {
   const project = makeSavedProject("one", "2026-07-17T08:00:00.000Z");
+  project.settings.imageAdjustments = { brightness: 8, contrast: 12, saturation: 16, backgroundRemoval: "soft" };
   const backup = createProjectBackup([project], "2026-07-17T09:00:00.000Z");
   const restored = parseProjectBackup(backup);
 
