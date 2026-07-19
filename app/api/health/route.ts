@@ -6,6 +6,7 @@ export async function GET() {
       persistence: "device-local",
       cloudDatabase: false,
       projectBackupVersion: 2,
+      patternGeneration: "worker-with-fallback",
     },
     {
       headers: {

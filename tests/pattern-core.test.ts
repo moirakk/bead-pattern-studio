@@ -18,12 +18,15 @@ import {
   commitPattern,
   createBeadColor,
   createPatternHistory,
+  generatePattern,
+  generatePatternAsync,
   hexToRgb,
   makeMard221Palette,
   makeMard291Palette,
   nearestColor,
   paintPatternArea,
   paintPatternCell,
+  packCanvasPixels,
   parsePaletteCsv,
   redoPattern,
   rgbToHex,
@@ -31,6 +34,7 @@ import {
   resetPatternHistory,
   summarizePattern,
   undoPattern,
+  type PatternWorker,
 } from "../lib/pattern";
 import type { RGB } from "../lib/pattern";
 
@@ -50,6 +54,7 @@ test("reports the deployed service boundary accurately", async () => {
     persistence: "device-local",
     cloudDatabase: false,
     projectBackupVersion: 2,
+    patternGeneration: "worker-with-fallback",
   });
 });
 
@@ -110,6 +115,117 @@ test("validates preprocessing dimensions and neutralizes non-finite adjustments"
     }),
     [{ r: 10, g: 20, b: 30 }],
   );
+});
+
+test("packs canvas RGBA pixels into composited RGB bytes", () => {
+  const packed = packCanvasPixels(new Uint8ClampedArray([
+    255, 0, 0, 255,
+    0, 0, 0, 0,
+  ]), 2, 1);
+
+  assert.deepEqual([...packed], [255, 0, 0, 247, 248, 251]);
+  assert.throws(() => packCanvasPixels(new Uint8ClampedArray(3), 1, 1), /RGBA values/);
+});
+
+test("generates the same pattern through the asynchronous fallback", async () => {
+  const makeInput = () => ({
+    pixels: new Uint8ClampedArray([255, 0, 0, 250, 250, 250]),
+    width: 2,
+    height: 1,
+    palette,
+    colorLimit: 4,
+    ditherMode: "none" as const,
+    imageAdjustments: { brightness: 0, contrast: 0, saturation: 0, backgroundRemoval: "none" as const },
+  });
+
+  assert.deepEqual(await generatePatternAsync(makeInput(), { workerFactory: null }), generatePattern(makeInput()));
+});
+
+test("returns worker generation results and releases the worker", async () => {
+  let terminated = false;
+  const input = {
+    pixels: new Uint8ClampedArray([0, 0, 0]),
+    width: 1,
+    height: 1,
+    palette,
+    colorLimit: 4,
+    ditherMode: "none" as const,
+    imageAdjustments: { brightness: 0, contrast: 0, saturation: 0, backgroundRemoval: "none" as const },
+  };
+  const expected = generatePattern({ ...input, pixels: input.pixels.slice() });
+  const worker: PatternWorker = {
+    onmessage: null,
+    onerror: null,
+    postMessage() {
+      queueMicrotask(() => worker.onmessage?.({ data: { ok: true, pattern: expected } } as MessageEvent));
+    },
+    terminate() {
+      terminated = true;
+    },
+  };
+
+  assert.deepEqual(await generatePatternAsync(input, { workerFactory: () => worker }), expected);
+  assert.equal(terminated, true);
+});
+
+test("falls back to local generation when the worker cannot load", async () => {
+  const input = {
+    pixels: new Uint8ClampedArray([0, 0, 0]),
+    width: 1,
+    height: 1,
+    palette,
+    colorLimit: 4,
+    ditherMode: "none" as const,
+    imageAdjustments: { brightness: 0, contrast: 0, saturation: 0, backgroundRemoval: "none" as const },
+  };
+  let terminated = false;
+  const worker: PatternWorker = {
+    onmessage: null,
+    onerror: null,
+    postMessage() {
+      queueMicrotask(() => worker.onerror?.({ message: "worker unavailable" } as ErrorEvent));
+    },
+    terminate() {
+      terminated = true;
+    },
+  };
+
+  assert.deepEqual(
+    await generatePatternAsync(input, { workerFactory: () => worker }),
+    generatePattern(input),
+  );
+  assert.equal(input.pixels.length, 3);
+  assert.equal(terminated, true);
+});
+
+test("terminates an in-flight pattern worker when generation is cancelled", async () => {
+  const controller = new AbortController();
+  let terminated = false;
+  let transferredBuffers = 0;
+  const worker: PatternWorker = {
+    onmessage: null,
+    onerror: null,
+    postMessage(_message, transfer) {
+      transferredBuffers = transfer.length;
+    },
+    terminate() {
+      terminated = true;
+    },
+  };
+  const generation = generatePatternAsync({
+    pixels: new Uint8ClampedArray([255, 0, 0]),
+    width: 1,
+    height: 1,
+    palette,
+    colorLimit: 4,
+    ditherMode: "none",
+    imageAdjustments: { brightness: 0, contrast: 0, saturation: 0, backgroundRemoval: "none" },
+  }, { signal: controller.signal, workerFactory: () => worker });
+
+  controller.abort();
+  await assert.rejects(generation, (error: unknown) => error instanceof Error && error.name === "AbortError");
+  assert.equal(transferredBuffers, 1);
+  assert.equal(terminated, true);
 });
 
 test("builds a pattern and enforces color limit by usage", () => {

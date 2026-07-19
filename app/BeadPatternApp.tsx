@@ -29,19 +29,19 @@ import {
   type ProjectSort,
 } from "@/lib/projects/library";
 import {
-  buildPattern,
-  adjustImagePixels,
   canRedoPattern,
   canUndoPattern,
   colorDistance,
   commitPattern,
   createPatternHistory,
   DEFAULT_IMAGE_ADJUSTMENTS,
+  generatePatternAsync,
   hexToRgb,
   makeMard221Palette,
   makeMard291Palette,
   paintPatternCell,
   paintPatternArea,
+  packCanvasPixels,
   parsePaletteCsv,
   redoPattern,
   rgbToLab,
@@ -53,7 +53,6 @@ import {
   type ImageAdjustments,
   type Pattern,
   type PatternHistory,
-  type RGB,
 } from "@/lib/pattern";
 
 type EditMode = "paint" | "select";
@@ -299,6 +298,7 @@ export function BeadPatternApp() {
 
   useEffect(() => {
     if (!sourceImage) return;
+    const abortController = new AbortController();
     const timer = window.setTimeout(() => {
       if (!hasUsablePalette) {
         setPatternHistory((current) => resetPatternHistory(current, null));
@@ -326,25 +326,35 @@ export function BeadPatternApp() {
       ctx.imageSmoothingQuality = "high";
       ctx.drawImage(sourceImage, cropX, cropY, cropW, cropH, 0, 0, gridWidth, gridHeight);
       const data = ctx.getImageData(0, 0, gridWidth, gridHeight).data;
-      const pixels: RGB[] = [];
-      for (let index = 0; index < data.length; index += 4) {
-        const alpha = data[index + 3] / 255;
-        pixels.push({
-          r: Math.round(data[index] * alpha + 247 * (1 - alpha)),
-          g: Math.round(data[index + 1] * alpha + 248 * (1 - alpha)),
-          b: Math.round(data[index + 2] * alpha + 251 * (1 - alpha)),
+      const pixels = packCanvasPixels(data, gridWidth, gridHeight);
+      setStatus("正在后台计算颜色与图纸...");
+      void generatePatternAsync({
+        pixels,
+        width: gridWidth,
+        height: gridHeight,
+        palette,
+        colorLimit,
+        ditherMode,
+        imageAdjustments,
+      }, { signal: abortController.signal })
+        .then((nextPattern) => {
+          if (abortController.signal.aborted) return;
+          setPatternHistory((current) => resetPatternHistory(current, nextPattern));
+          setActiveCell(null);
+          setSelection(null);
+          setIsSelecting(false);
+          const ditherLabel = ditherMode === "none" ? "未使用抖动" : `已使用${ditherMode === "soft" ? "柔和" : "强化"}抖动`;
+          setStatus(`已生成 ${gridWidth} x ${gridHeight}，共 ${gridWidth * gridHeight} 颗豆，${ditherLabel}。`);
+        })
+        .catch((error: unknown) => {
+          if (error instanceof Error && error.name === "AbortError") return;
+          setStatus(error instanceof Error ? `图纸生成失败：${error.message}` : "图纸生成失败，请重试。");
         });
-      }
-      const adjustedPixels = adjustImagePixels(pixels, gridWidth, gridHeight, imageAdjustments);
-      const nextPattern = buildPattern(adjustedPixels, gridWidth, gridHeight, palette, colorLimit, { ditherMode });
-      setPatternHistory((current) => resetPatternHistory(current, nextPattern));
-      setActiveCell(null);
-      setSelection(null);
-      setIsSelecting(false);
-      const ditherLabel = ditherMode === "none" ? "未使用抖动" : `已使用${ditherMode === "soft" ? "柔和" : "强化"}抖动`;
-      setStatus(`已生成 ${gridWidth} x ${gridHeight}，共 ${gridWidth * gridHeight} 颗豆，${ditherLabel}。`);
     }, 120);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      abortController.abort();
+    };
   }, [sourceImage, gridWidth, gridHeight, palette, colorLimit, ditherMode, crop, imageAdjustments, hasUsablePalette]);
 
   useEffect(() => {
