@@ -5,6 +5,7 @@ export async function GET() {
       service: "bead-pattern-studio",
       persistence: "device-local",
       cloudDatabase: false,
+      projectBackupVersion: 2,
     },
     {
       headers: {

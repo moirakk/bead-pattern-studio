@@ -49,6 +49,7 @@ test("reports the deployed service boundary accurately", async () => {
     service: "bead-pattern-studio",
     persistence: "device-local",
     cloudDatabase: false,
+    projectBackupVersion: 2,
   });
 });
 
@@ -324,29 +325,77 @@ test("round-trips versioned project backups", () => {
   const backup = createProjectBackup([project], "2026-07-17T09:00:00.000Z");
   const restored = parseProjectBackup(backup);
 
+  assert.equal(JSON.parse(backup).version, 2);
   assert.deepEqual(restored, [project]);
   assert.throws(() => parseProjectBackup('{"format":"unknown","version":1,"projects":[]}'), /无法识别/);
 });
 
+test("imports legacy v1 project backups", () => {
+  const project = makeSavedProject("legacy", "2026-07-17T08:00:00.000Z");
+  const backup = JSON.stringify({
+    format: "bead-pattern-studio",
+    version: 1,
+    exportedAt: "2026-07-17T09:00:00.000Z",
+    projects: [project],
+  });
+
+  assert.deepEqual(parseProjectBackup(backup), [project]);
+});
+
+test("makes large project backups substantially smaller in v2", () => {
+  const project = makeSavedProject("compact", "2026-07-17T08:00:00.000Z");
+  project.pattern = {
+    width: 40,
+    height: 25,
+    cells: Array.from({ length: 1000 }, () => ({
+      code: "R",
+      hex: "#ff0000",
+      source: { r: 255, g: 0, b: 0 },
+    })),
+  };
+  project.settings.gridWidth = 40;
+  project.settings.gridHeight = 25;
+  const legacy = JSON.stringify({
+    format: "bead-pattern-studio",
+    version: 1,
+    exportedAt: "2026-07-17T09:00:00.000Z",
+    projects: [project],
+  }, null, 2);
+  const compact = createProjectBackup([project], "2026-07-17T09:00:00.000Z");
+
+  assert.ok(compact.length < legacy.length * 0.2, `${compact.length} should be much smaller than ${legacy.length}`);
+  assert.deepEqual(parseProjectBackup(compact), [project]);
+});
+
 test("rejects internally inconsistent project backups", () => {
   const project = makeSavedProject("unsafe", "2026-07-17T08:00:00.000Z");
-  const duplicateId = createProjectBackup([project, { ...project }]);
-  assert.throws(() => parseProjectBackup(duplicateId), /重复的作品 ID/);
+  assert.throws(() => createProjectBackup([project, { ...project }]), /重复的作品 ID/);
 
   const mismatchedPattern = structuredClone(project);
   mismatchedPattern.pattern.cells[0].hex = "#000000";
-  assert.throws(() => parseProjectBackup(createProjectBackup([mismatchedPattern])), /损坏或不完整/);
+  assert.throws(() => createProjectBackup([mismatchedPattern]), /损坏或不完整/);
 
   const poisonedPalette = structuredClone(project);
   poisonedPalette.palette[0].lab.l = 0;
-  assert.throws(() => parseProjectBackup(createProjectBackup([poisonedPalette])), /损坏或不完整/);
+  assert.throws(() => createProjectBackup([poisonedPalette]), /损坏或不完整/);
+
+  const compact = JSON.parse(createProjectBackup([project]));
+  compact.projects[0].pattern.cellColors = "//8=";
+  assert.throws(() => parseProjectBackup(JSON.stringify(compact)), /损坏或不完整/);
+  compact.projects[0].pattern.cellColors = "not-base64";
+  assert.throws(() => parseProjectBackup(JSON.stringify(compact)), /损坏或不完整/);
 });
 
 test("recovers valid local projects when another stored record is corrupted", () => {
   const project = makeSavedProject("recoverable", "2026-07-17T08:00:00.000Z");
   assert.deepEqual(recoverSavedProjectCollection([{ broken: true }, project]), [project]);
   assert.throws(
-    () => parseProjectBackup(JSON.stringify({ format: "bead-pattern-studio", version: 1, projects: [{ broken: true }, project] })),
+    () => parseProjectBackup(JSON.stringify({
+      format: "bead-pattern-studio",
+      version: 1,
+      exportedAt: "2026-07-17T09:00:00.000Z",
+      projects: [{ broken: true }, project],
+    })),
     /损坏或不完整/,
   );
 });

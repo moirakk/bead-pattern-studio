@@ -1,4 +1,4 @@
-import { hexToRgb, rgbToLab, type BeadColor, type DitherMode, type ImageAdjustments, type Pattern, type RGB } from "@/lib/pattern";
+import { createBeadColor, hexToRgb, rgbToLab, type BeadColor, type DitherMode, type ImageAdjustments, type Pattern, type RGB } from "@/lib/pattern";
 
 export type Crop = {
   x: number;
@@ -36,15 +36,28 @@ export type SavedProject = {
   thumbnail: string;
 };
 
-type ProjectBackupEnvelope = {
+type CompactPattern = {
+  width: number;
+  height: number;
+  colors: Array<{ code: string; hex: string }>;
+  cellColors: string;
+  sourceRgb: string;
+};
+
+type CompactSavedProject = Omit<SavedProject, "pattern" | "palette"> & {
+  pattern: CompactPattern;
+  palette: Array<Pick<BeadColor, "code" | "name" | "hex">>;
+};
+
+type ProjectBackupEnvelopeV2 = {
   format: "bead-pattern-studio";
-  version: 1;
+  version: 2;
   exportedAt: string;
-  projects: SavedProject[];
+  projects: CompactSavedProject[];
 };
 
 const BACKUP_FORMAT = "bead-pattern-studio";
-const BACKUP_VERSION = 1;
+const BACKUP_VERSION = 2;
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 const MAX_BACKUP_PROJECTS = 100;
 const MAX_PATTERN_SIDE = 500;
@@ -55,13 +68,15 @@ export const MAX_PROJECT_BACKUP_BYTES = 96 * 1024 * 1024;
 const PROJECT_CATEGORIES = new Set(["未分类", "人物", "动漫", "游戏", "动物", "花卉", "风景", "其他"]);
 
 export function createProjectBackup(projects: SavedProject[], exportedAt = new Date().toISOString()) {
-  const envelope: ProjectBackupEnvelope = {
+  if (!Number.isFinite(Date.parse(exportedAt))) throw new Error("备份导出时间无效。");
+  const validProjects = parseSavedProjectCollection(projects);
+  const envelope: ProjectBackupEnvelopeV2 = {
     format: BACKUP_FORMAT,
     version: BACKUP_VERSION,
     exportedAt,
-    projects,
+    projects: validProjects.map(compactSavedProject),
   };
-  return JSON.stringify(envelope, null, 2);
+  return JSON.stringify(envelope);
 }
 
 export function parseProjectBackup(text: string): SavedProject[] {
@@ -75,10 +90,155 @@ export function parseProjectBackup(text: string): SavedProject[] {
     throw new Error("备份文件不是有效的 JSON。");
   }
 
-  if (!isRecord(parsed) || parsed.format !== BACKUP_FORMAT || parsed.version !== BACKUP_VERSION) {
+  if (
+    !isRecord(parsed) ||
+    parsed.format !== BACKUP_FORMAT ||
+    typeof parsed.exportedAt !== "string" ||
+    !Number.isFinite(Date.parse(parsed.exportedAt))
+  ) {
     throw new Error("无法识别这个备份文件或版本。");
   }
-  return parseSavedProjectCollection(parsed.projects);
+  if (parsed.version === 1) return parseSavedProjectCollection(parsed.projects);
+  if (parsed.version === BACKUP_VERSION) return parseCompactProjectCollection(parsed.projects);
+  throw new Error("无法识别这个备份文件或版本。");
+}
+
+function compactSavedProject(project: SavedProject): CompactSavedProject {
+  const colors: CompactPattern["colors"] = [];
+  const colorIndexes = new Map<string, number>();
+  const colorHexByCode = new Map<string, string>();
+  const cellColorBytes = new Uint8Array(project.pattern.cells.length * 2);
+  const sourceBytes = new Uint8Array(project.pattern.cells.length * 3);
+
+  project.pattern.cells.forEach((cell, index) => {
+    const normalizedHex = cell.hex.toLowerCase();
+    const existingHex = colorHexByCode.get(cell.code);
+    if (existingHex !== undefined && existingHex !== normalizedHex) {
+      throw new Error(`色号 ${cell.code} 在同一图纸中对应了多个颜色。`);
+    }
+    colorHexByCode.set(cell.code, normalizedHex);
+    let colorIndex = colorIndexes.get(cell.code);
+    if (colorIndex === undefined) {
+      colorIndex = colors.length;
+      if (colorIndex >= MAX_PALETTE_COLORS) throw new Error("图纸使用的色号数量超过备份限制。");
+      colorIndexes.set(cell.code, colorIndex);
+      colors.push({ code: cell.code, hex: normalizedHex });
+    }
+    cellColorBytes[index * 2] = colorIndex & 0xff;
+    cellColorBytes[index * 2 + 1] = colorIndex >> 8;
+    sourceBytes[index * 3] = Math.round(cell.source.r);
+    sourceBytes[index * 3 + 1] = Math.round(cell.source.g);
+    sourceBytes[index * 3 + 2] = Math.round(cell.source.b);
+  });
+
+  return {
+    ...project,
+    pattern: {
+      width: project.pattern.width,
+      height: project.pattern.height,
+      colors,
+      cellColors: bytesToBase64(cellColorBytes),
+      sourceRgb: bytesToBase64(sourceBytes),
+    },
+    palette: project.palette.map(({ code, name, hex }) => ({ code, name, hex: hex.toLowerCase() })),
+  };
+}
+
+function parseCompactProjectCollection(value: unknown): SavedProject[] {
+  if (!Array.isArray(value) || value.length > MAX_BACKUP_PROJECTS) {
+    throw new Error("作品数量无效。");
+  }
+  const projects = value.map(parseCompactSavedProject);
+  if (projects.some((project) => project === null)) {
+    throw new Error("作品数据有损坏或不完整。");
+  }
+  const validProjects = projects as SavedProject[];
+  if (new Set(validProjects.map((project) => project.id)).size !== validProjects.length) {
+    throw new Error("备份中存在重复的作品 ID。");
+  }
+  return validProjects;
+}
+
+function parseCompactSavedProject(value: unknown): SavedProject | null {
+  if (!isRecord(value) || !Array.isArray(value.palette) || !isRecord(value.pattern)) return null;
+  if (value.palette.length > MAX_PALETTE_COLORS) return null;
+
+  const palette: BeadColor[] = [];
+  try {
+    for (const color of value.palette) {
+      if (
+        !isRecord(color) ||
+        !isShortString(color.code, 80) ||
+        !isShortString(color.name, 200) ||
+        typeof color.hex !== "string" ||
+        !HEX_COLOR.test(color.hex)
+      ) return null;
+      palette.push(createBeadColor(color.code, color.name, color.hex));
+    }
+  } catch {
+    return null;
+  }
+
+  const pattern = expandCompactPattern(value.pattern);
+  if (!pattern) return null;
+  const candidate: Record<string, unknown> = {
+    id: value.id,
+    title: value.title,
+    sourceName: value.sourceName,
+    savedAt: value.savedAt,
+    pattern,
+    palette,
+    settings: value.settings,
+    thumbnail: value.thumbnail,
+  };
+  if (value.category !== undefined) candidate.category = value.category;
+  if (value.remixSource !== undefined) candidate.remixSource = value.remixSource;
+  return parseSavedProject(candidate);
+}
+
+function expandCompactPattern(value: Record<string, unknown>): Pattern | null {
+  if (!isIntegerInRange(value.width, 1, MAX_PATTERN_SIDE) || !isIntegerInRange(value.height, 1, MAX_PATTERN_SIDE)) return null;
+  if (!Array.isArray(value.colors) || !value.colors.length || value.colors.length > MAX_PALETTE_COLORS) return null;
+  if (typeof value.cellColors !== "string" || typeof value.sourceRgb !== "string") return null;
+
+  const colors: CompactPattern["colors"] = [];
+  const seenCodes = new Set<string>();
+  for (const color of value.colors) {
+    if (
+      !isRecord(color) ||
+      !isShortString(color.code, 80) ||
+      typeof color.hex !== "string" ||
+      !HEX_COLOR.test(color.hex) ||
+      seenCodes.has(color.code)
+    ) return null;
+    seenCodes.add(color.code);
+    colors.push({ code: color.code, hex: color.hex.toLowerCase() });
+  }
+
+  const cellCount = value.width * value.height;
+  if (value.cellColors.length !== base64LengthForBytes(cellCount * 2) || value.sourceRgb.length !== base64LengthForBytes(cellCount * 3)) {
+    return null;
+  }
+  const cellColorBytes = base64ToBytes(value.cellColors);
+  const sourceBytes = base64ToBytes(value.sourceRgb);
+  if (!cellColorBytes || !sourceBytes || cellColorBytes.length !== cellCount * 2 || sourceBytes.length !== cellCount * 3) return null;
+
+  const cells = new Array<Pattern["cells"][number]>(cellCount);
+  for (let index = 0; index < cellCount; index += 1) {
+    const colorIndex = cellColorBytes[index * 2] | (cellColorBytes[index * 2 + 1] << 8);
+    const color = colors[colorIndex];
+    if (!color) return null;
+    cells[index] = {
+      code: color.code,
+      hex: color.hex,
+      source: {
+        r: sourceBytes[index * 3],
+        g: sourceBytes[index * 3 + 1],
+        b: sourceBytes[index * 3 + 2],
+      },
+    };
+  }
+  return { width: value.width, height: value.height, cells };
 }
 
 export function parseSavedProjectCollection(value: unknown): SavedProject[] {
@@ -237,6 +397,37 @@ function isRgb(value: unknown): value is RGB {
     isFiniteNumber(value.g) && value.g >= 0 && value.g <= 255 &&
     isFiniteNumber(value.b) && value.b >= 0 && value.b <= 255
   );
+}
+
+function bytesToBase64(bytes: Uint8Array) {
+  if (typeof globalThis.btoa === "function") {
+    let binary = "";
+    const chunkSize = 0x8000;
+    for (let index = 0; index < bytes.length; index += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+    }
+    return globalThis.btoa(binary);
+  }
+  return Buffer.from(bytes).toString("base64");
+}
+
+function base64LengthForBytes(byteLength: number) {
+  return 4 * Math.ceil(byteLength / 3);
+}
+
+function base64ToBytes(value: string): Uint8Array | null {
+  if (!/^(?:[a-z0-9+/]{4})*(?:[a-z0-9+/]{2}==|[a-z0-9+/]{3}=)?$/i.test(value)) return null;
+  try {
+    if (typeof globalThis.atob === "function") {
+      const binary = globalThis.atob(value);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+      return bytes;
+    }
+    return new Uint8Array(Buffer.from(value, "base64"));
+  } catch {
+    return null;
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
