@@ -23,7 +23,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#146b70",
+  themeColor: "#FDFAF5",
 };
 
 export default function RootLayout({
@@ -33,6 +33,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@200;300;500;700&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
+      </head>
       <body>
         <PwaInstaller />
         {children}

@@ -1408,10 +1408,10 @@ export function BeadPatternApp() {
     <main className="bead-app">
       <header className="hero">
         <div>
-          <p className="eyebrow">Fuse Beads Pattern Studio</p>
-          <h1>任意图片转拼豆图纸</h1>
+          <p className="eyebrow">Bead Pattern Studio</p>
+          <h1>把<em>任何图片</em>变成拼豆图纸</h1>
           <p className="hero-copy">
-            默认 MARD 291 全色色卡，可切换 221 常用版或导入店铺 CSV；生成后可编辑、备豆并导出 PNG/PDF 图纸。
+            选一张照片，选好色卡和尺寸，剩下的交给像素魔法。
           </p>
         </div>
         <div className="hero-meter">
@@ -1429,8 +1429,8 @@ export function BeadPatternApp() {
           aria-pressed={activeMobilePanel === "setup"}
           onClick={() => setActiveMobilePanel("setup")}
         >
-          <span>设置</span>
-          <small>{gridWidth} x {gridHeight}</small>
+          <span>🏠</span>
+          <small>首页</small>
         </button>
         <button
           type="button"
@@ -1438,8 +1438,8 @@ export function BeadPatternApp() {
           aria-pressed={activeMobilePanel === "pattern"}
           onClick={() => setActiveMobilePanel("pattern")}
         >
-          <span>图纸</span>
-          <small>{pattern ? `${formatCount(pattern.cells.length)} 颗` : "待生成"}</small>
+          <span>⊞</span>
+          <small>图纸</small>
         </button>
         <button
           type="button"
@@ -1447,8 +1447,8 @@ export function BeadPatternApp() {
           aria-pressed={activeMobilePanel === "palette"}
           onClick={() => setActiveMobilePanel("palette")}
         >
-          <span>色号</span>
-          <small>{stats.length ? `${stats.length} 色` : `${palette.length} 色卡`}</small>
+          <span>◎</span>
+          <small>色号</small>
         </button>
         <button
           type="button"
@@ -1456,8 +1456,8 @@ export function BeadPatternApp() {
           aria-pressed={activeMobilePanel === "discover"}
           onClick={() => setActiveMobilePanel("discover")}
         >
-          <span>发现</span>
-          <small>社区预览</small>
+          <span>🔍</span>
+          <small>发现</small>
         </button>
         <button
           type="button"
@@ -1465,8 +1465,8 @@ export function BeadPatternApp() {
           aria-pressed={activeMobilePanel === "works"}
           onClick={() => setActiveMobilePanel("works")}
         >
-          <span>作品</span>
-          <small>{savedProjects.length ? `${savedProjects.length} 个` : "未保存"}</small>
+          <span>♡</span>
+          <small>作品</small>
         </button>
       </nav>
 
