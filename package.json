@@ -28,6 +28,8 @@
     "@capacitor/ios": "^8.4.2",
     "@capacitor/share": "^8.0.1",
     "@capacitor/status-bar": "^8.0.3",
+    "@next/swc-darwin-arm64": "^16.2.10",
+    "@next/swc-wasm-nodejs": "^16.2.10",
     "drizzle-orm": "0.45.2",
     "next": "16.2.10",
     "react": "19.2.6",
