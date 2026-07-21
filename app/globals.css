@@ -295,8 +295,8 @@ button:disabled {
   width: 100%;
   min-height: 190px;
   margin: 14px 0;
-  background: #e8edf2;
-  border: 1px solid var(--line);
+  background: var(--warm);
+  border: 1px solid rgba(42, 37, 33, 0.04);
   border-radius: var(--r-card);
 }
 
@@ -442,27 +442,28 @@ input[type="range"] {
 .mode-toggle {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
-  padding: 4px;
-  background: #eef2f6;
-  border: 1px solid var(--line);
-  border-radius: var(--r-card);
+  gap: 3px;
+  padding: 3px;
+  background: var(--warm);
+  border: none;
+  border-radius: 16px;
 }
 
 .mode-toggle button {
   min-height: 34px;
-  color: var(--muted);
+  color: var(--ink-2);
   background: transparent;
   border: 0;
-  border-radius: 6px;
+  border-radius: 13px;
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 500;
+  transition: all 0.2s var(--ease-spring);
 }
 
 .mode-toggle button.active {
   color: #fff;
   background: var(--coral);
-  box-shadow: 0 6px 16px rgba(20, 107, 112, 0.18);
+  box-shadow: 0 3px 10px rgba(194, 119, 94, 0.25);
 }
 
 .pattern-stage {
