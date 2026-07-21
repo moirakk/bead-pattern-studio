@@ -1406,7 +1406,7 @@ export function BeadPatternApp() {
 
   return (
     <main className="bead-app">
-      <header className="hero">
+      <header className={`hero${activeMobilePanel !== "setup" ? " hero-mobile-hidden" : ""}`}>
         <div>
           <p className="eyebrow">Bead Pattern Studio</p>
           <h1>把<em>任何图片</em>变成拼豆图纸</h1>
@@ -1494,8 +1494,9 @@ export function BeadPatternApp() {
           </label>
 
           <canvas ref={sourcePreviewRef} className="source-preview" aria-label="裁剪预览" />
-          {!sourceImage && <div className="empty-preview">等待图片上传</div>}
+          {!sourceImage && <div className="empty-preview">选一张图片开始<br /><small>拖进来也行，拍一张也行</small></div>}
 
+          {sourceImage && (<>
           <div className="field-grid">
             <label>
               裁剪 X
@@ -1548,7 +1549,6 @@ export function BeadPatternApp() {
               ))}
             </div>
           </div>
-
           <div className="panel-title compact">
             <span>2</span>
             <h2>成品尺寸</h2>
@@ -1567,10 +1567,6 @@ export function BeadPatternApp() {
             <input type="checkbox" checked={keepRatio} onChange={(event) => setKeepRatio(event.target.checked)} />
             按源图比例自动高度
           </label>
-          <div className="local-processing-note" role="note">
-            <strong>图片仅在本机处理</strong>
-            <span>无需登录，不上传原图；作品保存在当前设备。</span>
-          </div>
           <label className="slider-label">
             色数上限：{colorLimit}
             <input
@@ -1602,6 +1598,14 @@ export function BeadPatternApp() {
               ))}
             </div>
           </div>
+          </>)}
+
+          {!sourceImage && (
+          <div className="local-processing-note" role="note">
+            <strong>图片仅在本机处理</strong>
+            <span>无需登录，不上传原图；作品保存在当前设备。</span>
+          </div>
+          )}
         </aside>
 
         <section className={`pattern-stage mobile-panel ${activeMobilePanel === "pattern" ? "mobile-panel-active" : ""}`}>
@@ -1637,16 +1641,8 @@ export function BeadPatternApp() {
 
           <div className="paint-bar">
             <div>
-              <strong>{editMode === "paint" ? "手工替换单格" : "区域批量换色"}</strong>
-              <span>{editMode === "paint" ? "选择色号后点击任意格子即可替换。" : selectedArea ? `已选 ${selectedArea.width} x ${selectedArea.height}，共 ${selectedAreaCount} 格。` : "拖拽图纸框选要替换的区域。"}</span>
-            </div>
-            <div className="edit-mode-toggle" role="group" aria-label="编辑模式">
-              <button type="button" className={editMode === "paint" ? "active" : ""} aria-pressed={editMode === "paint"} onClick={() => setEditMode("paint")}>
-                单格
-              </button>
-              <button type="button" className={editMode === "select" ? "active" : ""} aria-pressed={editMode === "select"} onClick={() => setEditMode("select")}>
-                选区
-              </button>
+              <strong>手工替换单格</strong>
+              <span>选择色号后点击任意格子即可替换。</span>
             </div>
             <div className="history-actions">
               <button type="button" onClick={undoEdit} disabled={!canUndo} title="撤销上一次改单格">
