@@ -81,6 +81,7 @@ const A4_CANVAS = {
 const MAX_SAVED_PROJECTS = 100;
 const MAX_IMAGE_FILE_BYTES = 30 * 1024 * 1024;
 const MAX_IMAGE_PIXELS = 80_000_000;
+const MAX_SOURCE_DIM = 2000;
 const MAX_PALETTE_FILE_BYTES = 2_000_000;
 
 function stripFileExtension(filename: string) {
@@ -466,7 +467,30 @@ export function BeadPatternApp() {
         input.value = "";
         return;
       }
-      setSourceImage(image);
+
+      // Resize large photos to save memory (final pattern is max 180×180 beads)
+      let finalImage: HTMLImageElement = image;
+      const w = image.naturalWidth;
+      const h = image.naturalHeight;
+      if (w > MAX_SOURCE_DIM || h > MAX_SOURCE_DIM) {
+        const scale = Math.min(MAX_SOURCE_DIM / w, MAX_SOURCE_DIM / h);
+        const nw = Math.round(w * scale);
+        const nh = Math.round(h * scale);
+        const tmp = document.createElement("canvas");
+        tmp.width = nw;
+        tmp.height = nh;
+        const tctx = tmp.getContext("2d");
+        if (tctx) {
+          tctx.drawImage(image, 0, 0, nw, nh);
+          const resized = new Image();
+          resized.src = tmp.toDataURL("image/png");
+          tmp.width = 0;
+          tmp.height = 0;
+          finalImage = resized;
+        }
+      }
+
+      setSourceImage(finalImage);
       setActiveProjectId(null);
       setImageName(file.name);
       setProjectTitle((current) => {
@@ -474,7 +498,8 @@ export function BeadPatternApp() {
         return shouldAutoName ? stripFileExtension(file.name) : current;
       });
       if (keepRatio) {
-        setGridHeight(Math.max(8, Math.round(gridWidth * (image.naturalHeight / image.naturalWidth))));
+        const aspect = finalImage.naturalHeight / finalImage.naturalWidth;
+        setGridHeight(Math.max(8, Math.round(gridWidth * aspect)));
       }
       setActiveMobilePanel("pattern");
       setStatus("图片已载入，正在生成图纸。");

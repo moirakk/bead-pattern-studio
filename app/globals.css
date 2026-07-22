@@ -1869,6 +1869,8 @@ input[type="range"] {
   .canvas-wrap {
     min-height: min(58vh, 560px);
     max-height: 64vh;
+    touch-action: none;
+    -webkit-overflow-scrolling: auto;
   }
 
   .stage-toolbar {
