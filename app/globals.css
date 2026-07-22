@@ -34,7 +34,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: -apple-system, "SF Pro Text", "PingFang SC", "Noto Sans SC", sans-serif;
-  --font-serif: "Noto Serif SC", "Songti SC", Georgia, serif;
+  --font-serif: var(--font-serif-sc), "Noto Serif SC", "Songti SC", Georgia, serif;
   --font-mono: "SF Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
 }
 
@@ -1783,7 +1783,7 @@ input[type="range"] {
     bottom: 0;
     left: 0;
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     padding: 6px 2px calc(6px + var(--safe-b));
     background: rgba(253, 250, 245, 0.92);
     border-top: 0.5px solid rgba(42, 37, 33, 0.05);

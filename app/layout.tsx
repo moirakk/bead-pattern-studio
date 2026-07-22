@@ -1,6 +1,22 @@
 import type { Metadata, Viewport } from "next";
+import { Noto_Serif_SC, DM_Serif_Display } from "next/font/google";
 import "./globals.css";
 import { PwaInstaller } from "./pwa-installer";
+
+const notoSerifSC = Noto_Serif_SC({
+  subsets: ["latin"],
+  weight: ["200", "300", "500", "700"],
+  display: "swap",
+  variable: "--font-serif-sc",
+});
+
+const dmSerifDisplay = DM_Serif_Display({
+  subsets: ["latin"],
+  weight: "400",
+  style: ["normal", "italic"],
+  display: "swap",
+  variable: "--font-serif-display",
+});
 
 export const metadata: Metadata = {
   title: "拼豆图纸转换器",
@@ -32,12 +48,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@200;300;500;700&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
-      </head>
+    <html lang="zh-CN" className={`${notoSerifSC.variable} ${dmSerifDisplay.variable}`}>
       <body>
         <PwaInstaller />
         {children}

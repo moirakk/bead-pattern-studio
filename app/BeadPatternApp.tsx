@@ -1356,15 +1356,6 @@ export function BeadPatternApp() {
         </button>
         <button
           type="button"
-          className={activeMobilePanel === "discover" ? "active" : ""}
-          aria-pressed={activeMobilePanel === "discover"}
-          onClick={() => setActiveMobilePanel("discover")}
-        >
-          <span>🔍</span>
-          <small>发现</small>
-        </button>
-        <button
-          type="button"
           className={activeMobilePanel === "works" ? "active" : ""}
           aria-pressed={activeMobilePanel === "works"}
           onClick={() => setActiveMobilePanel("works")}
