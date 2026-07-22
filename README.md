@@ -1,74 +1,45 @@
-# Bead Pattern Studio / 拼豆图纸转换器
+# Bead Pattern Studio
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Next.js](https://img.shields.io/badge/Next.js-App%20Router-000?style=flat-square&logo=nextdotjs)](https://nextjs.org/)
-[![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+把任意一张图片，变成一张真的能照着拼的拼豆图纸。
 
-一站式拼豆创作平台 — 从任意图片生成精确的拼豆图纸，支持色卡匹配、手工改色、用量统计和专业导出。
+## 为什么做这个
 
-> **Live Demo** :point_right: [bead-pattern-studio.moirahou1.chatgpt.site](https://bead-pattern-studio.moirahou1.chatgpt.site)
+每个拼豆玩家大概都经历过这样的时刻：看到一张喜欢的图，想把它拼出来——然后卡住了。手动数格子太累，网上的转换工具要么颜色对不上手里的豆子，要么导出的图纸没有色号和坐标，拼到一半就数乱了。「想拼」和「能拼」之间，隔着一整晚的对格子。
 
-## Features
+Bead Pattern Studio 想抹平的就是这段距离。上传图片、选好色卡和成品尺寸，它会用 Lab 色彩空间做最近色匹配，把图片转成一格一格标好色号的图纸；匹配不满意的格子可以直接点击改色，支持完整的撤销重做。最后导出带网格、坐标、色号图例和用量统计的 PNG 或 A4 分页 PDF——打印出来，按图索豆，直接开拼。
 
-| 功能 | 说明 |
-|------|------|
-| **图片处理** | 上传、裁剪、亮度/对比度/饱和度调节、简易去背景 |
-| **智能匹配** | RGB 转 Lab 色彩空间，最近色匹配算法 |
-| **色卡系统** | 默认 MARD 291 全色 / MARD 221 常用，支持店铺色卡 CSV 导入 |
-| **精确控制** | 成品尺寸设定、豆数预估、色数上限、单格点击改色 |
-| **撤销/重做** | 完整的操作历史栈 |
-| **专业导出** | PNG/PDF 图纸，含网格、坐标、色号和图例 |
-| **社区原型** | 作品发现、收藏、复刻，发布草稿管理（移动端） |
+色卡是这类工具最容易「糊弄」的地方，这里认真对待：内置 MARD 291 全色与 221 常用色卡（色号经过交叉校验），也支持导入店铺自己的 CSV 色卡，让图纸上的色号和你手里能买到的豆子一一对应。
 
-## 项目目标
+## 核心功能
 
-面向拼豆玩家、店主、图纸设计师和手作创作者，提供从 **图片 → 图纸 → 作品 → 分享 → 材料连接** 的完整链路。
+- **图片预处理**：裁剪、亮度/对比度/饱和度调节、一键去背景，大图自动缩放
+- **智能匹配**：RGB → Lab 最近色匹配，可设色数上限与抖动模式，生成过程跑在 Web Worker 里不卡界面
+- **精确控制**：按成品尺寸设定网格，逐格点击改色，完整撤销/重做历史
+- **真实色卡**：MARD 291 / 221 内置，支持店铺 CSV 色卡导入
+- **专业导出**：PNG 图纸与 A4 分页 PDF，含网格坐标、色号图例、按用量排序的采购参考
+- **本地作品库**：项目保存在设备本地，支持备份导出与作品海报分享
 
-```
-短期  准确好用的图纸生成器
-中期  项目保存、作品集、小程序传播
-长期  真实店铺色卡、库存、价格、订单估算、图纸商城
-```
+## Stack
 
-## 技术架构
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-000?style=flat-square&logo=nextdotjs)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React_19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 
-```mermaid
-flowchart LR
-  Upload["图片上传"] --> Process["裁剪 & 图像处理"]
-  Process --> Pixelate["像素化 & 色卡匹配"]
-  Pixelate --> Edit["手工编辑 & 改色"]
-  Edit --> Export["PNG / PDF 导出"]
-  Palette["色卡系统\nMARD 291 / 221 / CSV"] --> Pixelate
-```
+核心算法（色彩转换、匹配、抖动、图纸构建）是纯 TypeScript 函数，集中在 `lib/pattern/`，带单元测试，不依赖任何 UI 框架。另有 Capacitor 打包的 iOS 版本在 `mobile/` 与 `ios/`。
 
-## 本地开发
+## 快速开始
 
 ```bash
 npm install
-npm run dev       # 启动开发服务器
-npm run build     # 构建生产版本
+npm run dev      # 启动开发服务器
+npm run test     # 构建校验 + 核心算法测试
 ```
 
-核心页面：`app/BeadPatternApp.tsx` | 样式：`app/globals.css`
+在线体验：[bead-pattern-studio.moirahou1.chatgpt.site](https://bead-pattern-studio.moirahou1.chatgpt.site)
 
-## 文档
+更多设计文档见 [docs/](docs/)：产品蓝图、算法路线、色卡数据规范与色号来源校验等。
 
-- [产品蓝图](docs/product-blueprint.md) — 产品愿景与阶段规划
-- [产品计划](docs/product-plan.md) — 迭代计划与优先级
-- [技术架构](docs/technical-architecture.md) — 系统设计与技术选型
-- [色卡数据规范](docs/palette-format.md) — 色卡格式与导入规则
-- [色号来源验证](docs/color-source-audit.md) — 色号数据交叉校验
-- [算法路线图](docs/algorithm-roadmap.md) — 匹配算法演进计划
-- [社区产品设计](docs/community-product.md) — 社区功能设计文档
+---
 
-## Roadmap
-
-- [ ] A4 分页导出、坐标索引、采购清单、封面模板
-- [ ] 项目保存 & 作品集数据模型
-- [ ] 真实品牌/店铺色卡管理
-- [ ] 边缘保护、肤色保护、手工锁色等进阶算法
-- [ ] 公开作品页 & 个人作品集
-
-## License
-
-This project is currently published as a portfolio prototype.
+<sub>拼豆的乐趣在拼，不在数格子。</sub>
